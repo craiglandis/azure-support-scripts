@@ -45,7 +45,7 @@ if ($result.ExitCode -eq 'NoChangeNeeded')
         $disk | Add-VMHardDiskDrive -VMName $nestedGuestVmName -ErrorAction Stop
         $switch | Connect-VMNetworkAdapter -VMName $nestedGuestVmName
         $startvm = start-vm -Name $nestedGuestVmName -ErrorAction Stop
-        $nestedGuestVmState = get-vm -Name  -ErrorAction Stop | select Name, State, Status, PrimaryOperationalStatus
+        $nestedGuestVmState = (get-vm -Name $nestedGuestVmName -ErrorAction Stop).State
     }
     catch {
         throw $_
