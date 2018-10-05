@@ -343,17 +343,11 @@ else
     write-log "[Success] Found rescue VM $rescueVMName" -color green
 }
 
-<# To avoid disk signature collisions:
-1. CreateRescueVM
-2. <NEW> Install Hyper-V
-3. <NEW> Restart rescue VM to finish Hyper-V install
-4. AttachOsDisktoRescueVM
-5. <NEW> Create nested guest in Hyper-V from problem VM's OS disk
-6. Start rescue VM
-#>
-
+#Step 5a Install Hyper-V role in rescue VM
 if ($enableNestedHyperV)
 {
+    $location = $rescueVM.Location
+
     $rescueVmStartTime = get-date
     $timeoutInMinutes = 10
     write-log "[Running] Waiting for rescue VM $($rescueVm.Name) to be ready"
@@ -385,11 +379,12 @@ if ($enableNestedHyperV)
     {
         write-log "[Success] $run returned SuccessRestartRequired" -color green
         write-log "[Running] Restarting rescue VM $($rescueVm.Name) to complete Hyper-V role install"
+        #Step 5b Restart rescue VM to finish Hyper-V role install
         $return = restart-azurermvm -ResourceGroupName $rescueResourceGroupName -Name $rescueVm.Name
         if ($return.Status -eq 'Succeeded')
         {
             write-log "[Success] Restarted rescue VM $($rescueVm.Name)" -color green
-            start-sleep -Seconds 15
+            #start-sleep -Seconds 15
         }
 
         $rescueVmRestartTime = get-date
@@ -456,17 +451,15 @@ if (-not $attached)
     return
 }
 
+# Step 6a Create nested guest in rescue VM from problem VM's OS disk
 if ($enableNestedHyperV)
 {
-    write-log "[Running] Using VM agent custom script extension to run $run again in rescue VM $($rescueVm.Name) to complete Hyper-V configuration"
+    write-log "[Running] Creating nested guest VM in rescue VM $($rescueVm.Name)"
     Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion -ForceRerun (get-date).ticks
     $subStatuses = (Get-AzureRmVMExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Status).subStatuses
     $stdOut = ($subStatuses | where Code -match 'StdOut').Message.Trim()
     write-log "[Success] $run STDOUT: $stdout"
     write-log "You can now connect to rescue VM $($rescueVm.Name) and use Hyper-V Manager to connect to the problem VM."
-    #(Get-AzureRmVMCustomScriptExtension -ResourceGroupName $resourceGroupName -VMName $vmName -Name $extensionResourceName -status).subStatuses
-    #Remove-AzureRmVMCustomScriptExtension -ResourceGroupName $resourceGroupName -VMName $vmName -Name $extensionResourceName -Force
-
 }
 
 #Step 7 Start the VM
