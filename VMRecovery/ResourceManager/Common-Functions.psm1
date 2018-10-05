@@ -15,7 +15,7 @@ function Get-ValidLength (
     if ($InputString.Length -gt $Maxlength)
     {
         return $InputString.Substring(0,$Maxlength)
-    } 
+    }
     else
     {
         return $InputString
@@ -86,18 +86,18 @@ function GetStorageConnection
 {
     write-log "[Running] Getting the storage connection info for Storage $($storageAccountName)"
     try
-    {    
+    {
         $StorageAccountRg = Get-AzureRmStorageAccount | where {$_.StorageAccountName -eq $storageAccountName} | Select-Object -ExpandProperty ResourceGroupName
         if (-not $StorageAccountRg)
         {
             write-log "[Error] Unable to determine resource group for storage account $storageAccountName" -color red
             return $null
-        } 
-        $StorageAccountKey = (Get-AzureRmStorageAccountKey -Name $storageAccountName -ResourceGroupName $StorageAccountRg).Value[1] 
+        }
+        $StorageAccountKey = (Get-AzureRmStorageAccountKey -Name $storageAccountName -ResourceGroupName $StorageAccountRg).Value[1]
         $ContainerName = $osDiskVhdUri.Split('/')[3]
 
         # Connect to storage account
-        $Ctx = New-AzureStorageContext -StorageAccountName $storageAccountName -StorageAccountKey $StorageAccountKey 
+        $Ctx = New-AzureStorageContext -StorageAccountName $storageAccountName -StorageAccountKey $StorageAccountKey
         write-log "[Success] Gathered the connection info for Storage $($storageAccountName)" -color green
         Return $ctx
     }
@@ -108,7 +108,7 @@ function GetStorageConnection
         write-log "$message - Exception Type: $($_.Exception.GetType().FullName)" -logOnly
         write-log "Exception Message: $($_.Exception.Message)" -logOnly
         return $null
-    }      
+    }
 }
 
 
@@ -124,26 +124,26 @@ function CopyBlob
     [object]$Ctx
 
 )
-{ 
+{
     Try
     {
         if ($CopyType -eq 'OsDisk')
         {
-            write-log "[Running] Making a copy of the OS Disk $osDiskvhd" 
+            write-log "[Running] Making a copy of the OS Disk $osDiskvhd"
             $status = Start-AzureStorageBlobCopy -srcUri $sourceBlobUri -SrcContext $ctx -DestContainer $ContainerName -DestBlob $toBeFixedosDiskVhd -ConcurrentTaskCount 10 -Force
             write-log "[Success] Copied current OSDisk $osDiskvhd as $toBeFixedosDiskVhd" -color green
         }
         else
         {
-            write-log "[Running] Copying snapshot" 
+            write-log "[Running] Copying snapshot"
             $status = Start-AzureStorageBlobCopy -CloudBlob $CloudBlob -Context $Ctx -DestContext $Ctx -DestContainer $ContainerName -DestBlob $toBeFixedosDiskVhd -ConcurrentTaskCount 10 -Force
             write-log "[Success] Copied snapshot to $copiedOSDiskUri" -color green
-    
+
         }
-        $osFixDiskblob = Get-AzureRMStorageAccount -Name $storageAccountName -ResourceGroupName $StorageAccountRg | 
+        $osFixDiskblob = Get-AzureRMStorageAccount -Name $storageAccountName -ResourceGroupName $StorageAccountRg |
         Get-AzureStorageContainer | where {$_.Name -eq $ContainerName} | Get-AzureStorageBlob | where {$_.Name -eq $toBeFixedosDiskVhd -and $_.ICloudBlob.IsSnapshot -ne $true}
         $copiedOSDiskUri =$osFixDiskblob.ICloudBlob.Uri.AbsoluteUri
-        write-Log "[Information] Disk copied URI: $copiedOSDiskUri" 
+        write-Log "[Information] Disk copied URI: $copiedOSDiskUri"
         return $copiedOSDiskUri
     }
     Catch
@@ -166,11 +166,11 @@ function CreateSnapshot
 )
 {
     $VMblob = Get-AzureStorageBlob –Context $Ctx -Container $ContainerName | Where {$_.Name -eq $osDiskvhd -and $_.ICloudBlob.IsSnapshot -ne $true}
-        
+
     if (-not $VMblob)
     {
         write-log "[Error] Unable to find OS disk VHD blob for $osDiskvhd" -color red
-        return 
+        return
     }
 
     # Create snapshot of the problem VM's OS disk
@@ -190,12 +190,12 @@ function CreateSnapshot
         write-log $message -Color Red
         write-log "$message - Exception Type: $($_.Exception.GetType().FullName)" -logOnly
         write-log "Exception Message: $($_.Exception.Message)" -logOnly
-        return 
+        return
     }
 }
 
 
-function SnapshotAndCopyOSDisk 
+function SnapshotAndCopyOSDisk
 (
     [Object[]]$vm,
     [string] $resourceGroupName,
@@ -208,7 +208,7 @@ function SnapshotAndCopyOSDisk
     {
         write-log "[Error] Unable to determine OS disk VHD URI for problem VM $($vm.Name)" -color red
         return
-    } 
+    }
     else
     {
         write-log "[Success] Problem VM $($vm.Name) OS disk VHD URI: $osDiskVhdUri" -color green
@@ -219,12 +219,12 @@ function SnapshotAndCopyOSDisk
     $toBeFixedosDiskVhd = $prefix + "fixedos" +  $osDiskvhd
     $ContainerName = $osDiskVhdUri.Split('/')[3]
     $ctx = GetStorageConnection -storageAccountName $storageAccountName
-    if (-not $ctx) {return }    
-    $StorageAccountRg = Get-AzureRmStorageAccount | where {$_.StorageAccountName -eq $storageAccountName} | Select-Object -ExpandProperty ResourceGroupName    
+    if (-not $ctx) {return }
+    $StorageAccountRg = Get-AzureRmStorageAccount | where {$_.StorageAccountName -eq $storageAccountName} | Select-Object -ExpandProperty ResourceGroupName
     if (-not $StorageAccountRg)
     {
         write-log "[Error] Unable to determine the resource group of the storage account $($storageAccountName)" -color red
-        return 
+        return
     }
     try
     {
@@ -238,7 +238,7 @@ function SnapshotAndCopyOSDisk
         else
         {
             # Save array of all snapshots
-            $VMsnaps = Get-AzureStorageBlob –Context $Ctx -Container $ContainerName | sort @{expression="SnapshotTime";Descending=$true} | where-object {$_.Name -eq $osDiskvhd -and $_.ICloudBlob.IsSnapshot -and $_.SnapshotTime -ne $null} 
+            $VMsnaps = Get-AzureStorageBlob –Context $Ctx -Container $ContainerName | sort @{expression="SnapshotTime";Descending=$true} | where-object {$_.Name -eq $osDiskvhd -and $_.ICloudBlob.IsSnapshot -and $_.SnapshotTime -ne $null}
             if ($VMsnaps.Count -gt 0)
             {
                 $copiedOSDiskUri = CopyBlob -CopyType 'PageBlob' -CloudBlob $VMsnaps[0].ICloudBlob -ContainerName $ContainerName -toBeFixedosDiskVhd $toBeFixedosDiskVhd -StorageAccountRg $StorageAccountRg -Ctx $ctx
@@ -279,34 +279,34 @@ function CreateRemoveRescueRgScript(
     [string]$removeRescueRgScript,
     [string]$subscriptionId,
     [switch]$scriptonly,
-    [switch]$commandOnly             
+    [switch]$commandOnly
 )
 {
-    $step0="# Step 0: Logs-in to Azure" 
+    $step0="# Step 0: Logs-in to Azure"
     $loginCmd = "Login-AzureRmAccount"
-    $step1 ="# Step 1: Setting the context to SubscriptionID :$subscriptionId " 
+    $step1 ="# Step 1: Setting the context to SubscriptionID :$subscriptionId "
     $setSubIdCmd = "`$authContext = Set-AzureRmContext -Subscription $subscriptionId"
-    $step2="# Step 1: Removing the rescue resource Group $rescueResourceGroupName" 
+    $step2="# Step 1: Removing the rescue resource Group $rescueResourceGroupName"
     $removeRescueRgCmd = "`$result = Remove-AzureRmResourceGroup -Name $rescueResourceGroupName"
 
-    if (-not $scriptonly) 
+    if (-not $scriptonly)
     {
-         
+
         write-log "$removeRescueRgCmd" -noTimeStamp
     }
     try
     {
         if (-not $commandOnly)
         {
-            ("############################################################################" | Out-String).Trim() | out-file $removeRescueRgScript -Force 
+            ("############################################################################" | Out-String).Trim() | out-file $removeRescueRgScript -Force
             ("# List of steps to remove the rescue resource group $rescueResourceGroupName" | Out-String).Trim() | out-file $removeRescueRgScript -Append
             ("############################################################################" | Out-String).Trim() | out-file $removeRescueRgScript -Append
-            ("$step0" | Out-String).Trim() | out-file $removeRescueRgScript -Append 
+            ("$step0" | Out-String).Trim() | out-file $removeRescueRgScript -Append
             ("$loginCmd" | Out-String).Trim() | out-file $removeRescueRgScript -Append
-            ("$step1" | Out-String).Trim() | out-file $removeRescueRgScript -Append 
-            ("$setSubIdCmd" | Out-String).Trim() | out-file $removeRescueRgScript -Append 
-            ("$step2" | Out-String).Trim() | out-file $removeRescueRgScript -Append 
-            ("$removeRescueRgCmd" | Out-String).Trim() | out-file $removeRescueRgScript -Append 
+            ("$step1" | Out-String).Trim() | out-file $removeRescueRgScript -Append
+            ("$setSubIdCmd" | Out-String).Trim() | out-file $removeRescueRgScript -Append
+            ("$step2" | Out-String).Trim() | out-file $removeRescueRgScript -Append
+            ("$removeRescueRgCmd" | Out-String).Trim() | out-file $removeRescueRgScript -Append
         }
     }
     catch
@@ -315,9 +315,9 @@ function CreateRemoveRescueRgScript(
         write-log $message -color red
         write-log "$message - Exception Type: $($_.Exception.GetType().FullName)" -logOnly
         write-log "Exception Message: $($_.Exception.Message)"
-        return 
+        return
     }
-    return 
+    return
 }
 
 function CreateRestoreOriginalStateScript (
@@ -331,10 +331,10 @@ function CreateRestoreOriginalStateScript (
     [string]$restoreOriginalStateScript,
     [switch]$scriptonly
 )
-{    
+{
     $stepSetUplogin="# SetUp : Logs-in to Azure"
     $loginCmd = "Login-AzureRmAccount"
-    $stepSetup ="# SetUp : Setting the context to SubscriptionID :$subscriptionId " 
+    $stepSetup ="# SetUp : Setting the context to SubscriptionID :$subscriptionId "
     $SubIdCmd = "`$authContext = Set-AzureRmContext -Subscription $subscriptionId"
     $step1="# Step 1: Getting the problem vm $vmName object"
     $problemVMCmd = "`$problemvm = Get-AzureRmVM -ResourceGroupName $resourceGroupName -Name $vmName"
@@ -352,21 +352,21 @@ function CreateRestoreOriginalStateScript (
     if (-not $scriptonly)
     {
         write-log "`nYou can use the following commands to revert problem VM $vmName to its original state by swaping the original OS Disk:`n" -noTimeStamp
-        write-log "$step1" -noTimeStamp    
-        write-log "$problemVMCmd`n" -noTimeStamp    
-        write-log "$step2" -noTimeStamp    
+        write-log "$step1" -noTimeStamp
+        write-log "$problemVMCmd`n" -noTimeStamp
+        write-log "$step2" -noTimeStamp
         write-log "$stopAzurermVMCmd`n" -noTimeStamp
-        write-log "$step3" -noTimeStamp    
+        write-log "$step3" -noTimeStamp
         if (-not $managedVM){write-log "$vhdUriCmd`n" -noTimeStamp}
-        else{write-log "$setAzureRmOsDiskCmd`n" -noTimeStamp}       
-        write-log "$step4" -noTimeStamp    
-        write-log "$updateAzureRmCMCmd`n" -noTimeStamp    
-        write-log "$step5" -noTimeStamp    
+        else{write-log "$setAzureRmOsDiskCmd`n" -noTimeStamp}
+        write-log "$step4" -noTimeStamp
+        write-log "$updateAzureRmCMCmd`n" -noTimeStamp
+        write-log "$step5" -noTimeStamp
         write-log "$startAzurermVmCmd`n" -noTimeStamp
     }
     Try
     {
-        ("##################################################################################################################" | Out-String).Trim() | out-file $restoreOriginalStateScript -Force 
+        ("##################################################################################################################" | Out-String).Trim() | out-file $restoreOriginalStateScript -Force
         ("# List of steps and cmdlets that can be used to do a OS disk Swap to put the problem VM back to its original state" | Out-String).Trim() | out-file $restoreOriginalStateScript -Append
         ("##################################################################################################################" | Out-String).Trim() | out-file $restoreOriginalStateScript -Append
         ("$stepSetUplogin" | Out-String).Trim() | out-file $restoreOriginalStateScript -Append
@@ -398,9 +398,9 @@ function CreateRestoreOriginalStateScript (
         write-log $message -color red
         write-log "$message - Exception Type: $($_.Exception.GetType().FullName)" -logOnly
         write-log "Exception Message: $($_.Exception.Message)"
-        return 
+        return
     }
-    return 
+    return
 }
 
 function SupportedVM(
@@ -413,8 +413,8 @@ function SupportedVM(
         write-log "[Error] Unable to find VM. Verify the problem VM name and resource group name." -color red
         return $false
     }
-     
-    if (($vm.StorageProfile.OsDisk.ManagedDisk) -and (-not $AllowManagedVM)) 
+
+    if (($vm.StorageProfile.OsDisk.ManagedDisk) -and (-not $AllowManagedVM))
     {
         write-log "VM $($vm.Name) is a managed disk VM, and is currently not supported by this script." -color red
         return $false
@@ -467,25 +467,37 @@ function CreateRescueVM(
     [Parameter(mandatory=$false)]
     [String]$Version,
     [Parameter(mandatory=$false)]
-    [System.Management.Automation.PSCredential]$Credential
+    [System.Management.Automation.PSCredential]$Credential,
+    [Parameter(mandatory=$false)]
+    [switch]$enableNestedHyperV
 )
 {
     try
     {
         write-log "[Running] Initiating the process to create the rescue VM" -logOnly
-        
+
         if ($vm.StorageProfile.OsDisk.ManagedDisk) {$managedVM = $true} else {$managedVM = $false}
 
         $osDiskName  = $vm.StorageProfile.OsDisk.Name
-        $vmSize = $vm.HardwareProfile.VmSize
-        $osType = $vm.StorageProfile.OsDisk.OsType
         $location = $vm.Location
+        if ($enableNestedHyperV)
+        {
+            # TODO: Implement fallback to other V3 sizes
+            # $nestedCapableVMSizes = get-azurermvmsize -location $location | sort Name | where {$_.Name.Endswith('v3')}
+            # $nestedCapableVMSizes | where {$_.NumberOfCores -eq 4 -and $_.MemoryInMB -le 16384}
+            $vmSize = 'Standard_D4s_v3'
+        }
+        else
+        {
+            $vmSize = $vm.HardwareProfile.VmSize
+        }
+        $osType = $vm.StorageProfile.OsDisk.OsType
         $networkInterfaceName = $vm.NetworkProfile.NetworkInterfaces[0].Id.split('/')[-1]
         $MaxStorageAccountNameLength = 24
         if ([string]::IsNullOrWhitespace($osDiskName))
         {
             write-log "[Error] Unable to determine OS disk name for problem VM $($vm.name)" -color red
-            return 
+            return
         }
         if ([string]::IsNullOrWhitespace($vmSize))
         {
@@ -532,7 +544,7 @@ function CreateRescueVM(
         $rescueSubnet1Name = $prefix + "Subnet"
         $rescueVNetName = $prefix + "VNet"
         $rescueVNetAddressPrefix = "10.0.0.0/16"
-        $rescueVNetSubnetAddressPrefix = "10.0.0.0/24"   
+        $rescueVNetSubnetAddressPrefix = "10.0.0.0/24"
 
         # Compute
         $rescueComputerName = $prefix + "vm"
@@ -565,7 +577,7 @@ function CreateRescueVM(
         # Network
         write-log "[Running] Creating publicIpAddress for interfacename $rescueInterfaceName for rescue VM $rescueVMName"
         $rescuePip = New-AzureRmPublicIpAddress -Name $rescueInterfaceName -ResourceGroupName $rescueResourceGroupName -Location $location -AllocationMethod Dynamic -WarningAction SilentlyContinue -ErrorAction Stop
-        write-log "[Success] Created publicIpAddress for interfacename $rescueInterfaceName for rescue VM $rescueVMName"
+        write-log "[Success] Created publicIpAddress for interfacename $rescueInterfaceName for rescue VM $rescueVMName" -color green
 
         write-log "[Running] Creating subnet config for subnet $rescueSubnet1Name"
         $rescueSubnetConfig = New-AzureRmVirtualNetworkSubnetConfig -Name $rescueSubnet1Name -AddressPrefix $rescueVNetSubnetAddressPrefix -ErrorAction Stop
@@ -578,7 +590,7 @@ function CreateRescueVM(
         write-log "[Running] Creating network interface $rescueInterfaceName"
         $rescueInterface = New-AzureRmNetworkInterface -Name $rescueInterfaceName -ResourceGroupName $rescueResourceGroupName -Location $location -SubnetId $rescueVNet.Subnets[0].Id -PublicIpAddressId $rescuePIp.Id -WarningAction SilentlyContinue -ErrorAction Stop
         write-log "[Success] Created network interface $rescueInterfaceName" -color green
-    
+
         ## Setup local VM object
         if (-not $Credential)
         {
@@ -586,11 +598,11 @@ function CreateRescueVM(
             $Credential = get-credential -Message "Enter username and password for the rescue VM $rescueVMName that will be created."
             if ($Credential)
             {
-                write-log "[Success] Received username and password from credential prompt" -color green        
-            }       
+                write-log "[Success] Received username and password from credential prompt" -color green
+            }
 
         }
-   
+
         $rescueVM = New-AzureRmVMConfig -VMName $rescueVMName -VMSize $rescueVMSize -WarningAction SilentlyContinue -ErrorAction Stop
         if ($osType -eq 'Windows')
         {
@@ -634,12 +646,12 @@ function CreateRescueVM(
         {
             $rescueOSDiskUri = $rescueStorageAccount.PrimaryEndpoints.Blob.ToString() + "vhds/" + $rescueOSDiskName + ".vhd"
             $rescueVM = Set-AzureRmVMOSDisk -VM $rescueVM -Name $rescueOSDiskName -VhdUri $rescueOSDiskUri -CreateOption FromImage -WarningAction SilentlyContinue -ErrorAction Stop
-        } 
+        }
         ## Create the VM in Azure
-        write-log "[Running] Creating rescue VM $rescueVMName in resource group $rescueResourceGroupName"
+        write-log "[Running] Creating rescue VM $rescueVMName of size $vmSize in resource group $rescueResourceGroupName"
         $created = New-AzureRmVM -ResourceGroupName $rescueResourceGroupName -Location $location -VM $rescueVM -ErrorAction Stop -WarningAction SilentlyContinue
-        write-log "[Success] Created rescue VM $rescueVMName in resource group $rescueResourceGroupName" -color green
-       
+        write-log "[Success] Created rescue VM $rescueVMName of size $vmSize in resource group $rescueResourceGroupName" -color green
+
         return $created
     }
     catch
@@ -649,7 +661,7 @@ function CreateRescueVM(
         write-log "$message - Exception Type: $($_.Exception.GetType().FullName)" -logOnly
         write-log "Exception Message: $($_.Exception.Message)"
         return $null
-    }    
+    }
 }
 
 function AttachOsDisktoRescueVM
@@ -663,7 +675,7 @@ function AttachOsDisktoRescueVM
 )
 {
     $returnVal = $true
-    #write-log "[Running] Get-AzureRmVM -ResourceGroupName $rescueResourceGroupName -Name $rescueVMName" 
+    #write-log "[Running] Get-AzureRmVM -ResourceGroupName $rescueResourceGroupName -Name $rescueVMName"
     $rescueVM = Get-AzureRmVM -resourceGroupName $rescueResourceGroupName -Name $rescueVMName -WarningAction SilentlyContinue
     if (-not $rescueVM)
     {
@@ -673,7 +685,7 @@ function AttachOsDisktoRescueVM
     write-log "[Running] Attaching OS disk to rescue VM $rescueVMName"
     try
     {
-        if ($managedDiskID) 
+        if ($managedDiskID)
         {
             Add-AzureRmVMDataDisk -VM $rescueVM -Name $diskName -CreateOption Attach -ManagedDiskId $managedDiskID -Lun 0
         }
@@ -681,7 +693,7 @@ function AttachOsDisktoRescueVM
         {
           Add-AzureRmVMDataDisk -VM $rescueVM -Name $diskName -Caching None -CreateOption Attach -DiskSizeInGB $osDiskSize -Lun 0 -VhdUri $osDiskVHDToBeRepaired
         }
-        Update-AzureRmVM -resourceGroupName $rescueResourceGroupName -VM $rescueVM 
+        Update-AzureRmVM -resourceGroupName $rescueResourceGroupName -VM $rescueVM
         write-log "[Success] Attached problem VM's OS disk as a data disk on rescue VM $rescueVMName" -color green
     }
     catch
@@ -710,7 +722,7 @@ function StopTargetVM
     else
     {
         if ($error)
-        {    
+        {
             write-log ('='*47) -logOnly
             write-log "Errors logged during script execution`n" -noTimestamp -logOnly
             write-log ('='*47) -logOnly
@@ -724,11 +736,11 @@ function StopTargetVM
 function write-log
 {
     param(
-        [string]$text,    
+        [string]$text,
         [string]$color = 'White',
         [switch]$logOnly,
         [switch]$noTimeStamp
-    )    
+    )
 
     $timestamp = ('[' + (get-date (get-date).ToUniversalTime() -format "yyyy-MM-dd HH:mm:ssZ") + '] ')
 
@@ -751,8 +763,8 @@ function write-log
     }
     else
     {
-        (($timestamp + $text) | out-string).Trim() | out-file $logFile -Append   
-    }        
+        (($timestamp + $text) | out-string).Trim() | out-file $logFile -Append
+    }
 }
 
 Export-ModuleMember -Function write-log

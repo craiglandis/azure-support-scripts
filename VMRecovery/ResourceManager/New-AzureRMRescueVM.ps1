@@ -11,7 +11,7 @@
 	-Attach the OS Disk to the Rescue VM
     -Starts the Rescue VM
     -RDPs to RescueVM (For Windows)
-    
+
 .PARAMETER VmName
     This is a mandatory Parameter, Name of the problem VM that needs to be recovered.
 
@@ -21,8 +21,11 @@
 .PARAMETER SubscriptionId
     Optional Parameter, SubscriptionID the VM belongs to.
 
+.PARAMETER EnableNestedHyperV
+    Optional Parameter, rescue VM will be created with a V3 VM size and have HyperV configured in it.
+
 .PARAMETER showErrors
-    Optional Parameter. By default it is set to true, so it displays all errors thrown by PowerShell in the console, if set to False it runs in silentMode. 
+    Optional Parameter. By default it is set to true, so it displays all errors thrown by PowerShell in the console, if set to False it runs in silentMode.
 
 .PARAMETER prefix
     Optional Parameter. By default the new Rescue VM and its resources are all created under a resource group named same as the original resource group name with a prefix of 'rescue', however the prefix can be changed to a different value to override the default 'rescue'
@@ -56,7 +59,7 @@
 .EXAMPLE
     Examples with optional parametersm in this example it will create the rescue VM with RedHat installed
 
-    $scriptResult = .\New-AzureRMRescueVM.ps1 -VmName ubuntu -resourceGroupName portalLin -subscriptionId xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx -Publisher RedHat -Offer RHEL -Sku 7.3 -Version 7.3.2017090723 -prefix rescuered 
+    $scriptResult = .\New-AzureRMRescueVM.ps1 -VmName ubuntu -resourceGroupName portalLin -subscriptionId xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx -Publisher RedHat -Offer RHEL -Sku 7.3 -Version 7.3.2017090723 -prefix rescuered
 
 .EXAMPLE
     $scriptResult = .\New-AzureRMRescueVM.ps1 -resourceGroupName sujtemp -VmName sujnortheurope -subscriptionId xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx -UserName "sujasd" -Password "XPa55w0rrd12345" -prefix "rescuex2"
@@ -64,24 +67,24 @@
 .EXAMPLE
     Example for managed disk VM:
 
-    $scriptResult =  .\New-AzureRMRescueVM.ps1 -resourceGroupName recoveryVMRg -VmName recovmtestmg -subscriptionId xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx -UserName "sujasd" -Password "XPa55w0rrd12345" -prefix "rescuex1" 
+    $scriptResult =  .\New-AzureRMRescueVM.ps1 -resourceGroupName recoveryVMRg -VmName recovmtestmg -subscriptionId xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx -UserName "sujasd" -Password "XPa55w0rrd12345" -prefix "rescuex1"
 
 .EXAMPLE
     Example for managed disk VM
 
-    $scriptResult = .\New-AzureRMRescueVM.ps1 -resourceGroupName recoveryVMRg -VmName recovmtestmg  -UserName "sujasd" -Password "XPa55w0rrd12345" -prefix "rescuex2" 
+    $scriptResult = .\New-AzureRMRescueVM.ps1 -resourceGroupName recoveryVMRg -VmName recovmtestmg  -UserName "sujasd" -Password "XPa55w0rrd12345" -prefix "rescuex2"
 
 .EXAMPLE
     Example for marketplace image with Plan
 
     $scriptResult = .\New-AzureRMRescueVM.ps1 -resourceGroupName recoverytest -VmName datasciencevm  -UserName "sujasd" -Password "XPa55w0rrd12345" -prefix "rescuex17" -AllowManagedVM
 
-.EXAMPLE 
+.EXAMPLE
     Using a VM created from a custom image:
 
     $scriptResult =  .\New-AzureRMRescueVM.ps1 -resourceGroupName testvmrecovery2 -VmName win2016custom  -UserName "sujasd" -Password "XPa55w0rrd12345" -prefix "rescuex18"
 
-.EXAMPLE 
+.EXAMPLE
     Using a VM Unmanaged Windows VM
 
     $scriptResult =  .\New-AzureRMRescueVM.ps1 -resourceGroupName testvmrecovery2 -VmName sujUNManagedvm  -UserName "sujasd" -Password "XPa55w0rrd12345" -prefix "rescuex48"
@@ -103,6 +106,9 @@ param(
 
         [Parameter(mandatory=$false)]
         [String]$subscriptionId,
+
+        [Parameter(mandatory=$false)]
+        [switch]$enableNestedHyperV,
 
         [Parameter(mandatory=$false)]
         [String]$Password,
@@ -145,19 +151,19 @@ $restoreCommandFile = "Restore_" + $vmName + ".ps1"
 set-location $scriptPath
 $commonFunctionsModule = "$scriptPath\Common-Functions.psm1"
 
-#Import-Module Common-Functions -ArgumentList $logFile -ErrorAction Stop 
-if (get-module Common-Functions) 
+#Import-Module Common-Functions -ArgumentList $logFile -ErrorAction Stop
+if (get-module Common-Functions)
 {
     remove-module -name Common-Functions
-}   
-import-module -Name $commonFunctionsModule -ArgumentList $logFile -ErrorAction Stop 
+}
+import-module -Name $commonFunctionsModule -ArgumentList $logFile -ErrorAction Stop
 write-log "Log file: $logFile"
 write-log $MyInvocation.Line -logOnly
 
 #Checks to see if AzureRM is available
-if (-not (get-module -ListAvailable -name 'AzureRM.Profile') -and (-not (Get-Module -ListAvailable -Name 'Az.Profile'))) 
+if (-not (get-module -ListAvailable -name 'AzureRM.Profile') -and (-not (Get-Module -ListAvailable -Name 'Az.Profile')))
 {
-    $message = "Azure PowerShell not installed. Either install Azure PowerShell from https://docs.microsoft.com/en-us/powershell/azure/install-azurerm-ps or use Cloud Shell PowerShell at https://shell.azure.com/powershell" 
+    $message = "Azure PowerShell not installed. Either install Azure PowerShell from https://docs.microsoft.com/en-us/powershell/azure/install-azurerm-ps or use Cloud Shell PowerShell at https://shell.azure.com/powershell"
     write-log $message -color red
     $scriptResult = Get-ScriptResultObject -scriptSucceeded $false -rescueScriptCommand $MyInvocation.Line -FailureReason $message
     return $scriptResult
@@ -169,12 +175,12 @@ if (-not (Get-AzureRmContext).Account)
 }
 
 if (-not $subscriptionId)
-{    
+{
     write-log "[Running] Getting authentication context"
     $authContext = Get-AzureRmContext
     if (-not $authContext.Subscription.Id)
-    {        
-        $message = "[Error] Unable to determine subscription ID. Run the script again using -SubscriptionID to specify the subscription ID." 
+    {
+        $message = "[Error] Unable to determine subscription ID. Run the script again using -SubscriptionID to specify the subscription ID."
         write-log $message -color red
         $scriptResult = Get-ScriptResultObject -scriptSucceeded $false -rescueScriptCommand $MyInvocation.Line -FailureReason $message
         return $scriptResult
@@ -188,7 +194,7 @@ else
     write-log $authContext -logOnly
     if (-not $authContext.Subscription.Id)
     {
-        $message = "[Error] Unable to set context to subscription ID $subscriptionId. Run Login-AzureRMAccount and then try the script again." 
+        $message = "[Error] Unable to set context to subscription ID $subscriptionId. Run Login-AzureRMAccount and then try the script again."
         write-log $message -color red
         $scriptResult = Get-ScriptResultObject -scriptSucceeded $false -rescueScriptCommand $MyInvocation.Line -FailureReason $message
         return $scriptResult
@@ -212,7 +218,7 @@ try
 {
     $vm = Get-AzureRmVM -ResourceGroupName $resourceGroupName -Name $vmName -ErrorAction Stop -WarningAction SilentlyContinue
 }
-catch 
+catch
 {
     $message = "[Error] Problem VM $vmName not found in resource group $resourceGroupName in subscription $subscriptionId. Verify the vmName, resourceGroupName, and subscriptionId and run the script again."
     write-log $message -color red
@@ -223,8 +229,8 @@ catch
 }
 write-log "`$vm: $vm" -logOnly
 
-if (-not (SupportedVM -vm $vm -AllowManagedVM $AllowManagedVM)) 
-{  
+if (-not (SupportedVM -vm $vm -AllowManagedVM $AllowManagedVM))
+{
     $message = "[Error] Problem VM $($vm.name) is not supported."
     write-log $message -color red
     $scriptResult = Get-ScriptResultObject -scriptSucceeded $false -rescueScriptCommand $MyInvocation.Line -FailureReason $message
@@ -243,18 +249,18 @@ else
 }
 
 write-log "[Running] Getting OsType for problem VM $vmName"
-if ($vm.StorageProfile.OsDisk.OsType -eq 'Windows') 
+if ($vm.StorageProfile.OsDisk.OsType -eq 'Windows')
 {
     $windowsVM = $true
 }
-else 
-{   
+else
+{
     $windowsVM = $false
 }
 write-log "[Success] Problem VM $vmName OsType is $($vm.StorageProfile.OsDisk.OsType)" -color green
 
 # Collect user name and password if they weren't specified at the command line
-if ($Password -and $UserName) 
+if ($Password -and $UserName)
 {
     write-log "Rescue VM will use the user name and password specified with the -username and -password parameters."
     $secPassword = ConvertTo-SecureString -String $Password -AsPlainText -Force
@@ -267,14 +273,14 @@ else
     $Cred = Get-Credential -Message "Enter username and password to use for the new rescue VM that will be created"
     if ($Cred)
     {
-        write-log "[Success] Credential prompt returned" -color green        
+        write-log "[Success] Credential prompt returned" -color green
     }
 }
 
 # Step 2 Stop problem VM
 $stopped = StopTargetVM -resourceGroupName $resourceGroupName -VmName $vmName
 write-log "`$stopped: $stopped" -logOnly
-if (-not $stopped) 
+if (-not $stopped)
 {
     $message = "[Error] Unable to stop problem VM $vmName"
     write-log $message -color red
@@ -284,20 +290,20 @@ if (-not $stopped)
 
 #Step 3 SnapshotAndCopyOSDisk only for Non-ManagedVM's.
 $OriginalosDiskVhdUri = $vm.StorageProfile.OsDisk.Vhd.Uri
-$OrignalosDiskName = $vm.StorageProfile.OsDisk.Name 
+$OrignalosDiskName = $vm.StorageProfile.OsDisk.Name
 if (-not $managedVM)
 {
-    $osDiskVHDToBeRepaired = SnapshotAndCopyOSDisk -vm $vm -prefix $prefix -resourceGroupName $resourceGroupName  
+    $osDiskVHDToBeRepaired = SnapshotAndCopyOSDisk -vm $vm -prefix $prefix -resourceGroupName $resourceGroupName
 }
 else
-{ 
+{
     $osDiskVHDToBeRepaired = $prefix + "fixedosdisk" + $OrignalosDiskName
     $OriginalProblemOSManagedDiskID = $vm.StorageProfile.OsDisk.ManagedDisk.Id
 }
 
 if (-not $osDiskVHDToBeRepaired)
 {
-    $message = "[Error] Unable to snapshot and copy the problem VM's OS disk." 
+    $message = "[Error] Unable to snapshot and copy the problem VM's OS disk."
     write-log $message -color red
     $scriptResult = Get-ScriptResultObject -scriptSucceeded $false -rescueScriptCommand $MyInvocation.Line -FailureReason $message
     return $scriptResult
@@ -311,11 +317,11 @@ $rescueResourceGroupName = "$prefix$resourceGroupName"
 $removeRescueRgScript = "Remove_Rescue_RG_" + $rescueResourceGroupName + ".ps1"
 CreateRemoveRescueRgScript -rescueResourceGroupName $rescueResourceGroupName -removeRescueRgScript $removeRescueRgScript -scriptonly -subscriptionId $subscriptionId
 $removeRescueRgScriptPath = (get-childitem $removeRescueRgScript).FullName
-$rescueVM = CreateRescueVM -vm $vm -resourceGroupName $resourceGroupName -rescueVMName $rescueVMName -rescueResourceGroupName $rescueResourceGroupName -prefix $prefix -Sku $sku -Offer $offer -Publisher $Publisher -Version $Version -Credential $cred 
+$rescueVM = CreateRescueVM -vm $vm -resourceGroupName $resourceGroupName -rescueVMName $rescueVMName -rescueResourceGroupName $rescueResourceGroupName -prefix $prefix -Sku $sku -Offer $offer -Publisher $Publisher -Version $Version -Credential $cred -EnableNestedHyperV:$enableNestedHyperV
 write-log "`$rescueVM: $rescueVM" -logOnly
 if (-not $rescueVM)
 {
-    $message = "[Error] Unable to create the Rescue VM, cannot proceed. You can use the following command to remove the rescue Resourcegroup $($rescueResourceGroupName) that was created as part of running this script OR execute the PowerShell script .\$($removeRescueRgScript) :`n" 
+    $message = "[Error] Unable to create the Rescue VM, cannot proceed. You can use the following command to remove the rescue Resourcegroup $($rescueResourceGroupName) that was created as part of running this script OR execute the PowerShell script .\$($removeRescueRgScript) :`n"
     write-log $message -color red
     CreateRemoveRescueRgScript -rescueResourceGroupName $rescueResourceGroupName -removeRescueRgScript $removeRescueRgScript -commandOnly -subscriptionId $subscriptionId
     $scriptResult = Get-ScriptResultObject -scriptSucceeded $false -rescueScriptCommand $MyInvocation.Line -FailureReason $message -cleanupScript $removeRescueRgScript
@@ -327,7 +333,7 @@ write-log "[Running] Get-AzureRmVM -resourceGroupName $rescueResourceGroupName -
 $rescueVM = Get-AzureRmVM -resourceGroupName $rescueResourceGroupName -Name $rescueVMName -WarningAction SilentlyContinue
 if (-not $rescueVM)
 {
-    $message = "[Error] Rescue VM $rescueVMName not found." 
+    $message = "[Error] Rescue VM $rescueVMName not found."
     write-log $message -color red
     $scriptResult = Get-ScriptResultObject -scriptSucceeded $false -rescueScriptCommand $MyInvocation.Line -FailureReason $message -cleanupScript $removeRescueRgScript
     return $scriptResult
@@ -335,6 +341,75 @@ if (-not $rescueVM)
 else
 {
     write-log "[Success] Found rescue VM $rescueVMName" -color green
+}
+
+<# To avoid disk signature collisions:
+1. CreateRescueVM
+2. <NEW> Install Hyper-V
+3. <NEW> Restart rescue VM to finish Hyper-V install
+4. AttachOsDisktoRescueVM
+5. <NEW> Create nested guest in Hyper-V from problem VM's OS disk
+6. Start rescue VM
+#>
+
+if ($enableNestedHyperV)
+{
+    $rescueVmStartTime = get-date
+    $timeoutInMinutes = 10
+    write-log "[Running] Waiting for rescue VM $($rescueVm.Name) to be ready"
+    do {
+        $rescueVmStatus = get-azurermvm -ResourceGroupName $rescueResourceGroupName -Name $rescuevm.Name -status
+        $powerState = ($rescueVmStatus.Statuses | where-object {$_.Code.StartsWith('PowerState')}).Code
+        $provisioningState = ($rescueVmStatus.Statuses | where-object {$_.Code.StartsWith('ProvisioningState')}).Code
+        $vmAgentStatus = ($rescueVmStatus.VMAgent.Statuses | where-object {$_.Code.StartsWith('ProvisioningState')}).DisplayStatus
+        if ((get-date) -gt $rescueVmStartTime.AddMinutes($timeoutInMinutes))
+        {
+            write-log "[Failed] Timed out waiting for VM: PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus, nested Hyper-V will not be configured" -color Yellow
+        }
+    } until ($powerState -eq 'PowerState/running' -and $provisioningState -eq 'ProvisioningState/succeeded' -and $vmAgentStatus -eq 'Ready')
+    write-log "[Success] rescue VM $($rescueVm.Name) is ready, PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus" -color Green
+
+    $fileUri = 'https://raw.githubusercontent.com/craiglandis/azure-support-scripts/master/VMRecovery/ResourceManager/Enable-NestedHyperV.ps1'
+    $run = $fileUri.Split('/')[-1]
+    $publisher = 'Microsoft.Compute'
+    $extensionType = 'CustomScriptExtension'
+    $typeHandlerVersion = '1.9'
+    $extensionResourceName = "$publisher.$extensionType"
+
+    write-log "[Running] Using VM agent custom script extension to run $run in rescue VM $($rescueVm.Name)"
+
+    Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion
+    $subStatuses = (Get-AzureRmVMExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Status).subStatuses
+    $stdOut = ($subStatuses | where Code -match 'StdOut').Message.Trim()
+    if ($stdOut -match 'SuccessRestartRequired')
+    {
+        write-log "[Success] $run returned SuccessRestartRequired" -color green
+        write-log "[Running] Restarting rescue VM $($rescueVm.Name) to complete Hyper-V role install"
+        $return = restart-azurermvm -ResourceGroupName $rescueResourceGroupName -Name $rescueVm.Name
+        if ($return.Status -eq 'Succeeded')
+        {
+            write-log "[Success] Restarted rescue VM $($rescueVm.Name)" -color green
+            start-sleep -Seconds 15
+        }
+
+        $rescueVmRestartTime = get-date
+        $timeoutInMinutes = 10
+        $powerState = $null
+        $provisioningState = $null
+        $vmAgentStatus = $null
+        write-log "[Running] Waiting for rescue VM $($rescueVm.Name) to be ready"
+        do {
+            $rescueVmStatus = get-azurermvm -ResourceGroupName $rescueResourceGroupName -Name $rescuevm.Name -status
+            $powerState = ($rescueVmStatus.Statuses | where-object {$_.Code.StartsWith('PowerState')}).Code
+            $provisioningState = ($rescueVmStatus.Statuses | where-object {$_.Code.StartsWith('ProvisioningState')}).Code
+            $vmAgentStatus = ($rescueVmStatus.VMAgent.Statuses | where-object {$_.Code.StartsWith('ProvisioningState')}).DisplayStatus
+            if ((get-date) -gt $rescueVmRestartTime.AddMinutes($timeoutInMinutes))
+            {
+                write-log "[Failed] Timed out waiting for VM: PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus, nested Hyper-V will not be configured" -color Yellow
+            }
+        } until ($powerState -eq 'PowerState/running' -and $provisioningState -eq 'ProvisioningState/succeeded' -and $vmAgentStatus -eq 'Ready')
+        write-log "[Success] rescue VM $($rescueVm.Name) is ready, PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus" -color Green
+    }
 }
 
 #Step 6 Attach problem VM's OS disk as a data disk to the rescue VM
@@ -350,9 +425,9 @@ if ($managedVM)
     {
         $storageType = 'Standard_LRS'
     }
-    
+
     $snapshotName = $osDiskVHDToBeRepaired
-    $ToBeFixedManagedOsDisk = $prefix + "fixedos" + $vm.StorageProfile.OsDisk.Name 
+    $ToBeFixedManagedOsDisk = $prefix + "fixedos" + $vm.StorageProfile.OsDisk.Name
     $oldDisk = Get-AzureRmDisk -resourceGroupName $resourceGroupName -DiskName $OrignalosDiskName -WarningAction SilentlyContinue
     $location = $oldDisk.Location
     $diskConfig = New-AzureRmDiskConfig -AccountType $storageType -Location $location -SourceResourceId $oldDisk.Id -CreateOption Copy -WarningAction SilentlyContinue
@@ -363,13 +438,13 @@ if ($managedVM)
 }
 else
 {
-    $diskName = ($osDiskVHDToBeRepaired.Split('/')[-1]).split('.')[0] 
+    $diskName = ($osDiskVHDToBeRepaired.Split('/')[-1]).split('.')[0]
     $diskName = Get-ValidLength -InputString $diskName -Maxlength 80
     $osDiskSize = $vm.StorageProfile.OsDisk.DiskSizeGB
     if (-not $osDiskSize)
     {
-       $osDiskSize = 127    
-       write-log "Unable to determine OS disk size for problem VM $vmName. Will use 127GB when attaching it to the rescue VM as a data disk." 
+       $osDiskSize = 127
+       write-log "Unable to determine OS disk size for problem VM $vmName. Will use 127GB when attaching it to the rescue VM as a data disk."
     }
 }
 $attached = AttachOsDisktoRescueVM -rescueVMName $rescueVMName -rescueResourceGroupName $rescueResourceGroupName -osDiskVHDToBeRepaired $osDiskVHDToBeRepaired -diskName $diskName -osDiskSize $osDiskSize -managedDiskID $managedDiskID
@@ -379,6 +454,19 @@ if (-not $attached)
 {
     write-log "[Error] Unable to attach disk $osDiskToBeRepaired as a data disk to rescue VM $rescueVMName" -color red
     return
+}
+
+if ($enableNestedHyperV)
+{
+    write-log "[Running] Using VM agent custom script extension to run $run again in rescue VM $($rescueVm.Name) to complete Hyper-V configuration"
+    Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion -ForceRerun (get-date).ticks
+    $subStatuses = (Get-AzureRmVMExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Status).subStatuses
+    $stdOut = ($subStatuses | where Code -match 'StdOut').Message.Trim()
+    write-log "[Success] $run STDOUT: $stdout"
+    write-log "You can now connect to rescue VM $($rescueVm.Name) and use Hyper-V Manager to connect to the problem VM."
+    #(Get-AzureRmVMCustomScriptExtension -ResourceGroupName $resourceGroupName -VMName $vmName -Name $extensionResourceName -status).subStatuses
+    #Remove-AzureRmVMCustomScriptExtension -ResourceGroupName $resourceGroupName -VMName $vmName -Name $extensionResourceName -Force
+
 }
 
 #Step 7 Start the VM
@@ -395,7 +483,7 @@ if ($started)
 if ($windowsVM -and -not (RanFromCloudShell))
 {
     write-log "[Running] Getting RDP file for rescue VM $($rescuevm.Name)"
-    Get-AzureRmRemoteDesktopFile -resourceGroupName $rescueResourceGroupName -Name $rescuevm.Name -Launch 
+    Get-AzureRmRemoteDesktopFile -resourceGroupName $rescueResourceGroupName -Name $rescuevm.Name -Launch
 }
 
 $script:scriptEndTime = (get-date).ToUniversalTime()
@@ -418,13 +506,13 @@ else
 
 if ($managedVM)
 {
-    $restoreScriptCommand = ".\Restore-AzureRMOriginalVM.ps1 -resourceGroupName $resourceGroupName -VmName $vmName -subscriptionId $subscriptionId -diskName $diskname -prefix $prefix -OriginalProblemOSManagedDiskID $OriginalProblemOSManagedDiskID -OriginalDiskName $OrignalosDiskName" 
+    $restoreScriptCommand = ".\Restore-AzureRMOriginalVM.ps1 -resourceGroupName $resourceGroupName -VmName $vmName -subscriptionId $subscriptionId -diskName $diskname -prefix $prefix -OriginalProblemOSManagedDiskID $OriginalProblemOSManagedDiskID -OriginalDiskName $OrignalosDiskName"
 }
 else
 {
     $restoreScriptCommand = ".\Restore-AzureRMOriginalVM.ps1 -resourceGroupName $resourceGroupName -VmName $vmName -subscriptionId $subscriptionId -FixedOsDiskUri $osDiskVHDToBeRepaired -OriginalosDiskVhdUri $OriginalosDiskVhdUri -prefix $prefix"
 }
-$restoreScriptCommand | set-content $restoreCommandFile 
+$restoreScriptCommand | set-content $restoreCommandFile
 $restoreScriptCommand = ".\" + $restoreCommandFile.Split('\')[-1]
 $restoreScriptPath = (get-childitem $restoreScriptCommand).FullName
 
@@ -434,10 +522,10 @@ write-log "2. After fixing the problem VM's OS disk, run the following script to
 write-log "   $restoreScriptPath`n" -notimestamp
 
 write-log "`n[Information] If you decide not to proceed further and would like to delete all the resources created thus far, you may delete the resource group $rescueResourceGroupName, by executing the script $removeRescueRgScriptPath" -noTimeStamp -color cyan
-write-log "`n $removeRescueRgScript" -notimestamp 
+write-log "`n $removeRescueRgScript" -notimestamp
 
 
-$scriptResult = Get-ScriptResultObject -scriptSucceeded $true -restoreScriptCommand $restoreScriptCommand -rescueScriptCommand $MyInvocation.Line -cleanupScript $removeRescueRgScript 
+$scriptResult = Get-ScriptResultObject -scriptSucceeded $true -restoreScriptCommand $restoreScriptCommand -rescueScriptCommand $MyInvocation.Line -cleanupScript $removeRescueRgScript
 
 #invoke-item $logFile
 #return $scriptResult
