@@ -347,7 +347,6 @@ else
 if ($enableNestedHyperV)
 {
     $location = $rescueVM.Location
-
     $rescueVmStartTime = get-date
     $timeoutInMinutes = 10
     write-log "[Running] Waiting for rescue VM $($rescueVm.Name) to be ready"
@@ -372,7 +371,7 @@ if ($enableNestedHyperV)
 
     write-log "[Running] Using VM agent custom script extension to run $run in rescue VM $($rescueVm.Name)"
 
-    Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion
+    $result = Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion
     $subStatuses = (Get-AzureRmVMExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Status).subStatuses
     $stdOut = ($subStatuses | where Code -match 'StdOut').Message.Trim()
     if ($stdOut -match 'SuccessRestartRequired')
@@ -457,9 +456,17 @@ if ($enableNestedHyperV)
     write-log "[Running] Creating nested guest VM in rescue VM $($rescueVm.Name)"
     Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion -ForceRerun (get-date).ticks
     $subStatuses = (Get-AzureRmVMExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Status).subStatuses
-    $stdOut = ($subStatuses | where Code -match 'StdOut').Message.Trim()
-    write-log "[Success] $run STDOUT: $stdout"
-    write-log "You can now connect to rescue VM $($rescueVm.Name) and use Hyper-V Manager to connect to the problem VM."
+    $nestedGuestStatus = ($subStatuses | where Code -match 'StdOut').Message.Trim()
+    if ($nestedGuestStatus -eq 'Running')
+    {
+        $isNestedGuestRunning = $true
+        write-log "[Success] nested guest VM status: $nestedGuestStatus" -color green
+    }
+    else
+    {
+        $isNestedGuestRunning = $false
+        write-log "[Failed] nested guest VM status: $nestedGuestStatus" -color Yellow
+    }
 }
 
 #Step 7 Start the VM
