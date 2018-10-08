@@ -482,10 +482,34 @@ function CreateRescueVM(
         $location = $vm.Location
         if ($enableNestedHyperV)
         {
-            # TODO: Implement fallback to other V3 sizes
-            # $nestedCapableVMSizes = get-azurermvmsize -location $location | sort Name | where {$_.Name.Endswith('v3')}
-            # $nestedCapableVMSizes | where {$_.NumberOfCores -eq 4 -and $_.MemoryInMB -le 16384}
-            $vmSize = 'Standard_D4s_v3'
+            #$v3VmSizes = (get-azurermvmsize -location $location | sort Name | where {$_.Name.Endswith('v3')}).Name
+            # Get-AzureRmComputeResourceSku knows about ARM VM size SKU restrictions (e.g. NotAvailableForSubscription) so it's better to use for this than Get-AzureRmVMSize
+            $v3VmSizes = (Get-AzureRmComputeResourceSku | where {$_.Name.Endswith('v3') -and $_.Locations.Contains($location) -and [string]::IsNullOrEmpty(($_.Restrictions | where Type -eq Location).ReasonCode)}).Name
+            # Only v3 sizes support nested virtualization.
+            # Picks the least expensive v3 size that is SSD-based.
+            # There are even larger v3 sizes but they are more expensive and likely overkill as a rescue VM.
+            # But
+            $v3VmSizes | foreach {
+                $v3VmSize = $_
+                switch -Regex ($v3VmSize)
+                {
+                    'Standard_D2s_v3' {$vmSize = 'Standard_D2s_v3'; Break} #2 cores, 8GB, SSD
+                    'Standard_D4s_v3' {$vmSize = 'Standard_D4s_v3'; Break} #4 cores, 16GB, SSD
+                    'Standard_E2s_v3' {$vmSize = 'Standard_E2s_v3'; Break} #2 cores, 16GB, SSD
+                    'Standard_E4-2s_v3' {$vmSize = 'Standard_E4-2s_v3'; Break}  #4 cores, 32GB, SSD
+                    'Standard_E4s_v3' {$vmSize = 'Standard_E4s_v3'; Break}  #4 cores, 32GB, SSD
+                    'Standard_D8s_v3' {$vmSize = 'Standard_D8s_v3'; Break} #8 cores, 32GB, SSD
+                    'Standard_D2_v3' {$vmSize = 'Standard_D2_v3'; Break} #2 cores, 8GB, HDD
+                    'Standard_E2_v3' {$vmSize = 'Standard_E2_v3'; Break} #2 cores, 16GB, HDD
+                    'Standard_D4_v3' {$vmSize = 'Standard_D4_v3'; Break} #4 cores, 16GB, HDD
+                    'Standard_E4_v3' {$vmSize = 'Standard_E4_v3'; Break} #4 cores, 32GB, HDD
+                    'Standard_D8_v3' {$vmSize = 'Standard_D8_v3'; Break} #8 cores, 32GB, HDD
+                }
+            }
+            if ([string]::IsNullOrEmpty($vmSize))
+            {
+                "A"
+            }
         }
         else
         {
