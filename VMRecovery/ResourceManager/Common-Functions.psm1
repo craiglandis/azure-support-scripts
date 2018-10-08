@@ -482,39 +482,43 @@ function CreateRescueVM(
         $location = $vm.Location
         if ($enableNestedHyperV)
         {
-            #$v3VmSizes = (get-azurermvmsize -location $location | sort Name | where {$_.Name.Endswith('v3')}).Name
             # Get-AzureRmComputeResourceSku knows about ARM VM size SKU restrictions (e.g. NotAvailableForSubscription) so it's better to use for this than Get-AzureRmVMSize
-            $v3VmSizes = (Get-AzureRmComputeResourceSku | where {$_.Name.Endswith('v3') -and $_.Locations.Contains($location) -and [string]::IsNullOrEmpty(($_.Restrictions | where Type -eq Location).ReasonCode)}).Name
-            # Only v3 sizes support nested virtualization.
-            # Picks the least expensive v3 size that is SSD-based.
-            # There are even larger v3 sizes but they are more expensive and likely overkill as a rescue VM.
-            # But
-            $v3VmSizes | foreach {
-                $v3VmSize = $_
-                switch -Regex ($v3VmSize)
-                {
-                    'Standard_D2s_v3' {$vmSize = 'Standard_D2s_v3'; Break} #2 cores, 8GB, SSD
-                    'Standard_D4s_v3' {$vmSize = 'Standard_D4s_v3'; Break} #4 cores, 16GB, SSD
-                    'Standard_E2s_v3' {$vmSize = 'Standard_E2s_v3'; Break} #2 cores, 16GB, SSD
-                    'Standard_E4-2s_v3' {$vmSize = 'Standard_E4-2s_v3'; Break}  #4 cores, 32GB, SSD
-                    'Standard_E4s_v3' {$vmSize = 'Standard_E4s_v3'; Break}  #4 cores, 32GB, SSD
-                    'Standard_D8s_v3' {$vmSize = 'Standard_D8s_v3'; Break} #8 cores, 32GB, SSD
-                    'Standard_D2_v3' {$vmSize = 'Standard_D2_v3'; Break} #2 cores, 8GB, HDD
-                    'Standard_E2_v3' {$vmSize = 'Standard_E2_v3'; Break} #2 cores, 16GB, HDD
-                    'Standard_D4_v3' {$vmSize = 'Standard_D4_v3'; Break} #4 cores, 16GB, HDD
-                    'Standard_E4_v3' {$vmSize = 'Standard_E4_v3'; Break} #4 cores, 32GB, HDD
-                    'Standard_D8_v3' {$vmSize = 'Standard_D8_v3'; Break} #8 cores, 32GB, HDD
-                }
+            # Get V3 sizes in the region. V3 size is required for nested virtualization.
+            $sizes = Get-AzureRmComputeResourceSku | where {$_.Name.Endswith('v3') -and $_.Locations.Contains($location)}
+            # Get the sizes with no SKU restrictions (exclude sizes where Restrictions is NotAvailableForSubscription, etc.)
+            $sizes = $sizes | where {[string]::IsNullOrEmpty(($_.Restrictions | where Type -eq Location).ReasonCode)}
+            # Put vCPUs and PremiumIO properties at root of object to facilitate sorting
+            $sizes = $sizes | select Name, @{Name='vCPUs';Expression = {[int]($_.Capabilities.Where{$_.Name -eq 'vCPUS'}).Value}}, @{Name='PremiumIO';Expression = {($_.Capabilities.Where{$_.Name -eq 'PremiumIO'}).Value}}
+            # Sort by vCPUs so least expensive sizes are first in the array
+            $sizes = $sizes | sort vCPUs
+            # Use the smallest premium IO size by core count.
+            # If no PremiumIO sizes available, use the smallest standard IO size.
+            # The smallest V3 sizes are 2 core, 8 GB, which should be enough for a rescue VM in most scenarios.
+            if ($sizes.PremiumIO -eq $true)
+            {
+                $vmSize = $sizes | where {$_.PremiumIO -eq $true -and $_.vCPUs -le 8} | select -first 1
             }
+            else
+            {
+                $vmSize = $sizes | where {$_.PremiumIO -eq $false -and $_.vCPUs -le 8} | select -first 1
+            }
+
             if ([string]::IsNullOrEmpty($vmSize))
             {
-                "A"
+                write-log "No V3 VM sizes are available for this subscription in $location. A V3 size is required for nested virtualization."
+                write-log "You can try running the script again without -EnableNestedVirtualization"
+                exit
+            }
+            else
+            {
+                $vmSize = $vmSize.Name
             }
         }
         else
         {
             $vmSize = $vm.HardwareProfile.VmSize
         }
+        write-log "$vmSize will be used for the rescue VM"
         $osType = $vm.StorageProfile.OsDisk.OsType
         $networkInterfaceName = $vm.NetworkProfile.NetworkInterfaces[0].Id.split('/')[-1]
         $MaxStorageAccountNameLength = 24
