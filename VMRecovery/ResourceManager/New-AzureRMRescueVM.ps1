@@ -371,7 +371,7 @@ if ($enableNestedHyperV)
 
     write-log "[Running] Using VM agent custom script extension to run $run in rescue VM $($rescueVm.Name)"
 
-    $result = Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion
+    $return = Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion
     $subStatuses = (Get-AzureRmVMExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Status).subStatuses
     $stdOut = ($subStatuses | where Code -match 'StdOut').Message.Trim()
     if ($stdOut -match 'SuccessRestartRequired')
@@ -454,21 +454,22 @@ if (-not $attached)
 if ($enableNestedHyperV)
 {
     write-log "[Running] Creating nested guest VM in rescue VM $($rescueVm.Name)"
-    Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion -ForceRerun (get-date).ticks
+    $return = Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion -ForceRerun (get-date).ticks
     $subStatuses = (Get-AzureRmVMExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Status).subStatuses
     $nestedGuestStatus = ($subStatuses | where Code -match 'StdOut').Message.Trim()
     if ($nestedGuestStatus -eq 'Running')
     {
         $isNestedGuestRunning = $true
-        write-log "[Success] nested guest VM status: $nestedGuestStatus" -color green
+        write-log "[Success] Created nested guest VM, status: $nestedGuestStatus" -color green
     }
     else
     {
         $isNestedGuestRunning = $false
-        write-log "[Failed] nested guest VM status: $nestedGuestStatus" -color Yellow
+        write-log "[Failed] Creating nested guest VM status: $nestedGuestStatus" -color Yellow
     }
 }
 
+<# Commenting this out, it's unnecessary because VMs are always started when created, you don't need to start them explicitly as a separate step
 #Step 7 Start the VM
 write-log "[Running] Starting rescue VM $($rescueVm.Name)"
 $started = Start-AzureRmVM -resourceGroupName $rescueResourceGroupName -Name $rescuevm.Name
@@ -477,6 +478,7 @@ if ($started)
 {
    write-log "[Success] Started rescue VM $($rescueVm.Name)" -color green
 }
+#>
 
 #Step 8 Automatically start up the RDP Connection, if is a windows VM and did not run from cloudshell
 #Manual Fixing of the oS Disk

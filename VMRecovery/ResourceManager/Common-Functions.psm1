@@ -482,7 +482,7 @@ function CreateRescueVM(
         $location = $vm.Location
         if ($enableNestedHyperV)
         {
-            # Get-AzureRmComputeResourceSku knows about ARM VM size SKU restrictions (e.g. NotAvailableForSubscription) so it's better to use for this than Get-AzureRmVMSize
+            # Using Get-AzureRmComputeResourceSku instead of Get-AzureRmVMSize because Get-AzureRmComputeResourceSku includes SKU restriction info (e.g. NotAvailableForSubscription) but Get-AzureRmVMSize does not.
             # Get V3 sizes in the region. V3 size is required for nested virtualization.
             $sizes = Get-AzureRmComputeResourceSku | where {$_.Name.Endswith('v3') -and $_.Locations.Contains($location)}
             # Get the sizes with no SKU restrictions (exclude sizes where Restrictions is NotAvailableForSubscription, etc.)
@@ -518,7 +518,7 @@ function CreateRescueVM(
         {
             $vmSize = $vm.HardwareProfile.VmSize
         }
-        write-log "$vmSize will be used for the rescue VM"
+
         $osType = $vm.StorageProfile.OsDisk.OsType
         $networkInterfaceName = $vm.NetworkProfile.NetworkInterfaces[0].Id.split('/')[-1]
         $MaxStorageAccountNameLength = 24
@@ -632,7 +632,8 @@ function CreateRescueVM(
         }
 
         $rescueVM = New-AzureRmVMConfig -VMName $rescueVMName -VMSize $rescueVMSize -WarningAction SilentlyContinue -ErrorAction Stop
-        if ($osType -eq 'Windows')
+        # When -EnableNestedHyperV is specified, create a Windows rescue VM even if the problem VM is Linux so the Linux problem VM will be available as a nested guest in the Windows rescue VM.
+        if ($osType -eq 'Windows' -or $enableNestedHyperV)
         {
             $rescueVM = Set-AzureRmVMOperatingSystem -VM $rescueVM -Windows -ComputerName $rescueComputerName -Credential $Credential -ProvisionVMAgent -EnableAutoUpdate -WarningAction SilentlyContinue -ErrorAction Stop
             # Use Windows Server 2016 with GUI as some may prefer a GUI for troubleshooting/mitigating the problem VM's OS disk
@@ -676,9 +677,9 @@ function CreateRescueVM(
             $rescueVM = Set-AzureRmVMOSDisk -VM $rescueVM -Name $rescueOSDiskName -VhdUri $rescueOSDiskUri -CreateOption FromImage -WarningAction SilentlyContinue -ErrorAction Stop
         }
         ## Create the VM in Azure
-        write-log "[Running] Creating rescue VM $rescueVMName of size $vmSize in resource group $rescueResourceGroupName"
+        write-log "[Running] Creating rescue VM $rescueVMName ($vmSize) in resource group $rescueResourceGroupName"
         $created = New-AzureRmVM -ResourceGroupName $rescueResourceGroupName -Location $location -VM $rescueVM -ErrorAction Stop -WarningAction SilentlyContinue
-        write-log "[Success] Created rescue VM $rescueVMName of size $vmSize in resource group $rescueResourceGroupName" -color green
+        write-log "[Success] Created rescue VM $rescueVMName ($vmSize) in resource group $rescueResourceGroupName" -color green
 
         return $created
     }
