@@ -1,3 +1,10 @@
+$nestedGuestVmName = 'ProblemVM'
+$batchFile = "$env:allusersprofile\Microsoft\Windows\Start Menu\Programs\StartUp\RunHyperVManagerAndVMConnect.cmd"
+$batchFileContents = @"
+start $env:windir\System32\mmc.exe $env:windir\System32\virtmgmt.msc
+start $env:windir\System32\vmconnect.exe localhost $nestedGuestVmName
+"@
+
 try {
     $result = install-windowsfeature -name Hyper-V -IncludeManagementTools -ErrorAction Stop
 }
@@ -8,7 +15,6 @@ catch {
 
 if ($result.ExitCode -eq 'NoChangeNeeded')
 {
-    $nestedGuestVmName = 'ProblemVM'
     try {
         $switch = get-vmswitch -Name Internal -SwitchType Internal -ErrorAction SilentlyContinue | select -first 1
         if (!$switch)
@@ -47,9 +53,7 @@ if ($result.ExitCode -eq 'NoChangeNeeded')
         $startvm = start-vm -Name $nestedGuestVmName -ErrorAction Stop
         $nestedGuestVmState = (get-vm -Name $nestedGuestVmName -ErrorAction Stop).State
         $newItem = New-ItemProperty -Path HKCU:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 –force
-        $batchFile = "$env:allusersprofile\Microsoft\Windows\Start Menu\Programs\StartUp\RunHyperVManagerAndVMConnect.cmd"
-        "start $env:windir\System32\mmc.exe $env:windir\System32\virtmgmt.msc" | out-file -FilePath $batchFile -Append -Encoding Default
-        "start $env:windir\System32\vmconnect.exe localhost $nestedGuestVmName" | out-file -FilePath $batchFile -Append -Encoding Default
+        $batchFileContents | out-file -FilePath $batchFile -Force -Encoding Default
     }
     catch {
         throw $_
