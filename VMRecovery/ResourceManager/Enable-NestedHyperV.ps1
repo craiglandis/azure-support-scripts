@@ -6,7 +6,10 @@ start $env:windir\System32\vmconnect.exe localhost $nestedGuestVmName
 "@
 
 try {
-    $newItem = New-ItemProperty -Path HKCU:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force
+    $return = New-ItemProperty -Path HKCU:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force
+    $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force
+    $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager\Oobe -Name DoNotOpenInitialConfigurationTasksAtLogon -PropertyType DWORD -Value 1 -force
+    #$return = New-ItemProperty -Path HKCU:\Software\Microsoft\ServerManager -Name CheckedUnattendLaunchSetting -PropertyType DWORD -Value 1 -force
     $result = install-windowsfeature -name Hyper-V -IncludeManagementTools -ErrorAction Stop
 }
 catch {
@@ -54,6 +57,7 @@ if ($result.ExitCode -eq 'NoChangeNeeded')
         $startvm = start-vm -Name $nestedGuestVmName -ErrorAction Stop
         $nestedGuestVmState = (get-vm -Name $nestedGuestVmName -ErrorAction Stop).State
         $batchFileContents | out-file -FilePath $batchFile -Force -Encoding Default
+        copy-item -path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Administrative Tools\Hyper-V Manager.lnk" -Destination "C:\Users\Public\Desktop"
     }
     catch {
         throw $_
