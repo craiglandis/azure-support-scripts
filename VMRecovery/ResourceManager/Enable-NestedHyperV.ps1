@@ -6,6 +6,7 @@ start $env:windir\System32\vmconnect.exe localhost $nestedGuestVmName
 "@
 
 try {
+    $newItem = New-ItemProperty -Path HKCU:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force
     $result = install-windowsfeature -name Hyper-V -IncludeManagementTools -ErrorAction Stop
 }
 catch {
@@ -52,7 +53,6 @@ if ($result.ExitCode -eq 'NoChangeNeeded')
         $switch | Connect-VMNetworkAdapter -VMName $nestedGuestVmName
         $startvm = start-vm -Name $nestedGuestVmName -ErrorAction Stop
         $nestedGuestVmState = (get-vm -Name $nestedGuestVmName -ErrorAction Stop).State
-        $newItem = New-ItemProperty -Path HKCU:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 –force
         $batchFileContents | out-file -FilePath $batchFile -Force -Encoding Default
     }
     catch {
