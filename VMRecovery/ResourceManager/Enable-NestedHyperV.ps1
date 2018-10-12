@@ -58,10 +58,10 @@ if ($result.ExitCode -eq 'NoChangeNeeded')
         $batchFileContents | out-file -FilePath $batchFile -Force -Encoding Default
         $return = copy-item -path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Administrative Tools\Hyper-V Manager.lnk" -Destination "C:\Users\Public\Desktop"
         $return = new-item -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" -Force
-        $return = reg load "HKLM\Default" "C:\Users\Default\ntuser.dat"
-        $return = new-item -Path "HKLM:\Default\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers"
-        $return = New-ItemProperty -Path "HKLM:\Default\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" -Name BackgroundType -PropertyType DWord -Value 1 -Force
-        $return = New-ItemProperty -Path "HKLM:\Default\Control Panel\Desktop" -Name Wallpaper -PropertyType String -Value "" -Force
+        $return = reg load "HKU\Default" "C:\Users\Default\ntuser.dat"
+        $return = reg add "HKU\Default\Control Panel\Desktop" /v WallPaper /t REG_SZ /f
+        $return = reg add "HKU\Default\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" /v BackgroundType /t REG_DWORD /d 1 /f
+        $return = reg unload "HKU\Default"
     }
     catch {
         throw $_
