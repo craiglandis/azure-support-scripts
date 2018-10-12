@@ -9,7 +9,7 @@ try {
     $return = New-ItemProperty -Path HKCU:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force
     $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force
     $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager\Oobe -Name DoNotOpenInitialConfigurationTasksAtLogon -PropertyType DWORD -Value 1 -force
-    netsh advfirewall firewall set rule group="Network Discovery" new enable=No
+    $return = netsh advfirewall firewall set rule group="Network Discovery" new enable=No
     $result = install-windowsfeature -name Hyper-V -IncludeManagementTools -ErrorAction Stop
 }
 catch {
