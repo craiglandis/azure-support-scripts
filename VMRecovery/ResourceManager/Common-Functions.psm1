@@ -678,7 +678,7 @@ function CreateRescueVM(
         }
         ## Create the VM in Azure
         write-log "[Running] Creating rescue VM $rescueVMName ($vmSize) in resource group $rescueResourceGroupName"
-        $created = New-AzureRmVM -ResourceGroupName $rescueResourceGroupName -Location $location -VM $rescueVM -ErrorAction Stop -WarningAction SilentlyContinue
+        $created = New-AzureRmVM -ResourceGroupName $rescueResourceGroupName -Location $location -VM $rescueVM -DisableBginfoExtension -ErrorAction Stop -WarningAction SilentlyContinue
         write-log "[Success] Created rescue VM $rescueVMName ($vmSize) in resource group $rescueResourceGroupName" -color green
 
         return $created

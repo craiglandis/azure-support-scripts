@@ -56,10 +56,10 @@ if ($result.ExitCode -eq 'NoChangeNeeded')
         $startvm = start-vm -Name $nestedGuestVmName -ErrorAction Stop
         $nestedGuestVmState = (get-vm -Name $nestedGuestVmName -ErrorAction Stop).State
         $batchFileContents | out-file -FilePath $batchFile -Force -Encoding Default
-        copy-item -path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Administrative Tools\Hyper-V Manager.lnk" -Destination "C:\Users\Public\Desktop"
-        #$return = netsh advfirewall firewall set rule group="Network Discovery" new enable=No
-        #$return = Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Public
-        $newNetworkWindowOff = new-item -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" -Force
+        $return = copy-item -path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Administrative Tools\Hyper-V Manager.lnk" -Destination "C:\Users\Public\Desktop"
+        $return = new-item -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" -Force
+        $return = New-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" -Name BackgroundType -PropertyType DWord -Value 1 -Force
+        $return = New-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name Wallpaper -PropertyType String -Value "" -Force
     }
     catch {
         throw $_
