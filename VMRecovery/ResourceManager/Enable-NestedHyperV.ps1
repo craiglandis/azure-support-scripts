@@ -57,8 +57,9 @@ if ($result.ExitCode -eq 'NoChangeNeeded')
         $nestedGuestVmState = (get-vm -Name $nestedGuestVmName -ErrorAction Stop).State
         $batchFileContents | out-file -FilePath $batchFile -Force -Encoding Default
         copy-item -path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Administrative Tools\Hyper-V Manager.lnk" -Destination "C:\Users\Public\Desktop"
-        $return = netsh advfirewall firewall set rule group="Network Discovery" new enable=No
-        $return = Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Public
+        #$return = netsh advfirewall firewall set rule group="Network Discovery" new enable=No
+        #$return = Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Public
+        $newNetworkWindowOff = new-item -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" -Force
     }
     catch {
         throw $_
