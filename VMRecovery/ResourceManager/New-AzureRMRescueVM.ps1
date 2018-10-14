@@ -404,6 +404,13 @@ if ($enableNestedHyperV)
         } until ($powerState -eq 'PowerState/running' -and $provisioningState -eq 'ProvisioningState/succeeded' -and $vmAgentStatus -eq 'Ready')
         write-log "[Success] rescue VM $($rescueVm.Name) is ready, PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus" -color Green
     }
+    else
+    {
+        write-log "[Failed] Hyper-V install failed, STDOUT: $stdout"
+        # Making the Hyper-V install failure a fatal error for the overall script execution.
+        # Though there may be a case for ignoring it to allow just using the rescue VM for investigating the problem VM's OS disk offline, just not in Hyper-V.
+        exit
+    }
 }
 
 #Step 6 Attach problem VM's OS disk as a data disk to the rescue VM

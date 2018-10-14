@@ -12,6 +12,25 @@ $hypervPowerShell = $features | where Name -eq 'Hyper-V-Powershell'
 
 if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Installed)
 {
+    [void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
+    [void][System.Reflection.Assembly]::LoadWithPartialName("System.Drawing")
+    $numPixels = 100
+    $bmpFile = new-object System.Drawing.Bitmap($numPixels,$numPixels)
+    $image = [System.Drawing.Graphics]::FromImage($bmpFile)
+    $rectangle = new-object Drawing.Rectangle 0, 0, $numPixels, $numPixels
+    $image.DrawImage($bmpFile, $rectangle, 0, 0, $numPixels, $numPixels, ([Drawing.GraphicsUnit]::Pixel))
+
+    $wallpaperFolderPath = "$env:windir\WEB\wallpaper\Windows"
+    $wallpaperFileName = "img0.jpg"
+    $wallpaperFilePath = "$wallpaperFolderPath\$wallpaperFileName"
+    $return = takeown /f $wallpaperFilePath
+    $return = icacls $wallpaperFilePath /Grant System:F
+    #$return = icacls $wallpaperFilePath /grant Administrators:F
+    copy-item -Path $wallpaperFilePath -Destination "$wallpaperFolderPath\img0.jpg.bak" -Force
+    remove-item -Path $wallpaperFilePath -Force
+    $bmpFile.Save($wallpaperFilePath, [System.Drawing.Imaging.ImageFormat]::jpeg)
+    $bmpFile.Dispose()
+
     $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force -ErrorAction SilentlyContinue
     $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager\Oobe -Name DoNotOpenInitialConfigurationTasksAtLogon -PropertyType DWORD -Value 1 -force -ErrorAction SilentlyContinue
 
