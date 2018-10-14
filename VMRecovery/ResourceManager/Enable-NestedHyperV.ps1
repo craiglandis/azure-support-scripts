@@ -12,6 +12,41 @@ $hypervPowerShell = $features | where Name -eq 'Hyper-V-Powershell'
 
 if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Installed)
 {
+    $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force -ErrorAction SilentlyContinue
+    $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager\Oobe -Name DoNotOpenInitialConfigurationTasksAtLogon -PropertyType DWORD -Value 1 -force -ErrorAction SilentlyContinue
+
+    $builtinAdminProfilePath = (Get-CimInstance -ClassName Win32_UserProfile -ErrorAction SilentlyContinue | where {$_.SID.EndsWith('-500')} | select LocalPath).LocalPath
+    $builtinAdminHivePath = "$builtinAdminProfilePath\NTUSER.DAT"
+    if (test-path -Path $builtinAdminHivePath)
+    {
+        $builtinAdminHiveTempRegPath = "HKU\BuiltInAdmin"
+        try {
+            $return = reg load $builtinAdminHiveTempRegPath $builtinAdminHivePath
+            $return = reg add "$builtinAdminHiveTempRegPath\Control Panel\Desktop" /v WallPaper /t REG_SZ /f
+            $return = reg add "$builtinAdminHiveTempRegPath\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" /v BackgroundType /t REG_DWORD /d 1 /f
+            $return = reg unload $builtinAdminHiveTempRegPath
+        }
+        catch {
+            # Catching as non-fatal since setting wallpaper is not essential to the script's overall goal.
+        }
+    }
+
+    $defaultUserHivePath = "$env:SystemDrive\Users\Default\NTUSER.DAT"
+
+    if (test-path -Path $defaultUserHivePath)
+    {
+        $defaultUserHiveTempRegPath = "HKU\Default"
+        try {
+            $return = reg load $defaultUserHiveTempRegPath $defaultUserHivePath
+            $return = reg add "$defaultUserHiveTempRegPath\Control Panel\Desktop" /v WallPaper /t REG_SZ /f
+            $return = reg add "$defaultUserHiveTempRegPath\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" /v BackgroundType /t REG_DWORD /d 1 /f
+            $return = reg unload $defaultUserHiveTempRegPath
+        }
+        catch {
+            # Catching as non-fatal since setting wallpaper is not essential to the script's overall goal.
+        }
+    }
+
     try {
         $switch = get-vmswitch -Name Internal -SwitchType Internal -ErrorAction SilentlyContinue | select -first 1
         if (!$switch)
@@ -52,10 +87,6 @@ if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Install
         $batchFileContents | out-file -FilePath $batchFile -Force -Encoding Default
         $return = copy-item -path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Administrative Tools\Hyper-V Manager.lnk" -Destination "C:\Users\Public\Desktop"
         $return = new-item -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" -Force
-        $return = reg load "HKU\Default" "C:\Users\Default\ntuser.dat"
-        $return = reg add "HKU\Default\Control Panel\Desktop" /v WallPaper /t REG_SZ /f
-        $return = reg add "HKU\Default\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" /v BackgroundType /t REG_DWORD /d 1 /f
-        $return = reg unload "HKU\Default"
     }
     catch {
         throw $_
@@ -66,48 +97,14 @@ if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Install
 }
 else
 {
-    $builtinAdminProfilePath = (Get-CimInstance -ClassName Win32_UserProfile -ErrorAction SilentlyContinue | where {$_.SID.EndsWith('-500')} | select LocalPath).LocalPath
-    $builtinAdminHivePath = "$builtinAdminProfilePath\NTUSER.DAT"
-    if (test-path -Path $builtinAdminHivePath)
-    {
-        $builtinAdminHiveTempRegPath = "HKU\BuiltInAdmin"
-        try {
-            $return = reg load $builtinAdminHiveTempRegPath $builtinAdminHivePath
-            $return = reg add "$builtinAdminHiveTempRegPath\Control Panel\Desktop" /v WallPaper /t REG_SZ /f
-            $return = reg add "$builtinAdminHiveTempRegPath\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" /v BackgroundType /t REG_DWORD /d 1 /f
-            $return = reg unload $builtinAdminHiveTempRegPath
-        }
-        catch {
-            # Catching as non-fatal since setting wallpaper is not essential to the script's overall goal.
-        }
-    }
-
-    $defaultUserHivePath = "$env:SystemDrive\Users\Default\NTUSER.DAT"
-
-    if (test-path -Path $defaultUserHivePath)
-    {
-        $defaultUserHiveTempRegPath = "HKU\Default"
-        try {
-            $return = reg load $defaultUserHiveTempRegPath $defaultUserHivePath
-            $return = reg add "$defaultUserHiveTempRegPath\Control Panel\Desktop" /v WallPaper /t REG_SZ /f
-            $return = reg add "$defaultUserHiveTempRegPath\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" /v BackgroundType /t REG_DWORD /d 1 /f
-            $return = reg unload $defaultUserHiveTempRegPath
-        }
-        catch {
-            # Catching as non-fatal since setting wallpaper is not essential to the script's overall goal.
-        }
-    }
-
     try {
-        $return = New-ItemProperty -Path HKCU:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force
-        $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force
-        $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager\Oobe -Name DoNotOpenInitialConfigurationTasksAtLogon -PropertyType DWORD -Value 1 -force
         $result = install-windowsfeature -name Hyper-V -IncludeManagementTools -ErrorAction Stop
     }
     catch {
         throw $_
         exit 1
     }
+    write-host $result.ExitCode
 }
 
 <#
