@@ -34,6 +34,8 @@ if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Install
     $bmpFile.Save($wallpaperFilePath, [System.Drawing.Imaging.ImageFormat]::jpeg)
     $bmpFile.Dispose()
 
+    del C:\Users\craig\AppData\Roaming\Microsoft\Windows\Themes\TranscodedWallpaper
+
     $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force -ErrorAction SilentlyContinue
     $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager\Oobe -Name DoNotOpenInitialConfigurationTasksAtLogon -PropertyType DWORD -Value 1 -force -ErrorAction SilentlyContinue
 <#
@@ -47,6 +49,10 @@ if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Install
             $return = reg add "$builtinAdminHiveTempRegPath\Control Panel\Desktop" /v WallPaper /t REG_SZ /f
             WallpaperStyle
             $return = reg add "$builtinAdminHiveTempRegPath\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" /v BackgroundType /t REG_DWORD /d 1 /f
+            HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers\CurrentWallpaperPath C:\windows\web\Wallpaper\Windows\img0.jpg
+             reg delete HKCU\Control Panel\Desktop\TranscodedImageCache_000
+             HKCU\Control Panel\Desktop\LastUpdated
+
             $return = reg unload $builtinAdminHiveTempRegPath
         }
         catch {
