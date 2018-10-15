@@ -25,15 +25,18 @@ if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Install
     $wallpaperFilePath = "$wallpaperFolderPath\$wallpaperFileName"
     $return = takeown /f $wallpaperFilePath
     $return = icacls $wallpaperFilePath /Grant System:F
-    #$return = icacls $wallpaperFilePath /grant Administrators:F
-    copy-item -Path $wallpaperFilePath -Destination "$wallpaperFolderPath\img0.jpg.bak" -Force
+    $return = icacls $wallpaperFilePath /grant Administrators:F
+    if ((test-path -path "$wallpaperFolderPath\img0.jpg.bak") -eq $false)
+    {
+        copy-item -Path $wallpaperFilePath -Destination "$wallpaperFolderPath\img0.jpg.bak" -Force
+    }
     remove-item -Path $wallpaperFilePath -Force
     $bmpFile.Save($wallpaperFilePath, [System.Drawing.Imaging.ImageFormat]::jpeg)
     $bmpFile.Dispose()
 
     $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force -ErrorAction SilentlyContinue
     $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager\Oobe -Name DoNotOpenInitialConfigurationTasksAtLogon -PropertyType DWORD -Value 1 -force -ErrorAction SilentlyContinue
-
+<#
     $builtinAdminProfilePath = (Get-CimInstance -ClassName Win32_UserProfile -ErrorAction SilentlyContinue | where {$_.SID.EndsWith('-500')} | select LocalPath).LocalPath
     $builtinAdminHivePath = "$builtinAdminProfilePath\NTUSER.DAT"
     if (test-path -Path $builtinAdminHivePath)
@@ -42,6 +45,7 @@ if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Install
         try {
             $return = reg load $builtinAdminHiveTempRegPath $builtinAdminHivePath
             $return = reg add "$builtinAdminHiveTempRegPath\Control Panel\Desktop" /v WallPaper /t REG_SZ /f
+            WallpaperStyle
             $return = reg add "$builtinAdminHiveTempRegPath\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" /v BackgroundType /t REG_DWORD /d 1 /f
             $return = reg unload $builtinAdminHiveTempRegPath
         }
@@ -65,7 +69,7 @@ if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Install
             # Catching as non-fatal since setting wallpaper is not essential to the script's overall goal.
         }
     }
-
+#>
     try {
         $switch = get-vmswitch -Name Internal -SwitchType Internal -ErrorAction SilentlyContinue | select -first 1
         if (!$switch)
