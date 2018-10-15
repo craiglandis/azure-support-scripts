@@ -469,7 +469,9 @@ function CreateRescueVM(
     [Parameter(mandatory=$false)]
     [System.Management.Automation.PSCredential]$Credential,
     [Parameter(mandatory=$false)]
-    [switch]$enableNestedHyperV
+    [switch]$enableNestedHyperV,
+    [Parameter(mandatory=$false)]
+    [String]$vmSize,
 )
 {
     try
@@ -480,43 +482,49 @@ function CreateRescueVM(
 
         $osDiskName  = $vm.StorageProfile.OsDisk.Name
         $location = $vm.Location
-        if ($enableNestedHyperV)
+        # If a size is given explicitly via -vmSize parameter, use that
+        # Otherwise, if -enableNestedHyperv is used, pick the least expensive v3 size available to the sub in the region of the problem VM
+        # If -enableNestedHyperv is not used, use the same size as the problem VM.
+        if ([string]::IsNullOrEmpty($vmSize))
         {
-            # Using Get-AzureRmComputeResourceSku instead of Get-AzureRmVMSize because Get-AzureRmComputeResourceSku includes SKU restriction info (e.g. NotAvailableForSubscription) but Get-AzureRmVMSize does not.
-            # Get V3 sizes in the region. V3 size is required for nested virtualization.
-            $sizes = Get-AzureRmComputeResourceSku | where {$_.Name.Endswith('v3') -and $_.Locations.Contains($location)}
-            # Get the sizes with no SKU restrictions (exclude sizes where Restrictions is NotAvailableForSubscription, etc.)
-            $sizes = $sizes | where {[string]::IsNullOrEmpty(($_.Restrictions | where Type -eq Location).ReasonCode)}
-            # Put vCPUs and PremiumIO properties at root of object to facilitate sorting
-            $sizes = $sizes | select Name, @{Name='vCPUs';Expression = {[int]($_.Capabilities.Where{$_.Name -eq 'vCPUS'}).Value}}, @{Name='PremiumIO';Expression = {($_.Capabilities.Where{$_.Name -eq 'PremiumIO'}).Value}}
-            # Sort by vCPUs so least expensive sizes are first in the array
-            $sizes = $sizes | sort vCPUs
-            # Use the smallest premium IO size by core count.
-            # If no PremiumIO sizes available, use the smallest standard IO size.
-            # The smallest V3 sizes are 2 core, 8 GB, which should be enough for a rescue VM in most scenarios.
-            if ($sizes.PremiumIO -eq $true)
+            if ($enableNestedHyperV)
             {
-                $vmSize = $sizes | where {$_.PremiumIO -eq $true -and $_.vCPUs -le 8} | select -first 1
-            }
-            else
-            {
-                $vmSize = $sizes | where {$_.PremiumIO -eq $false -and $_.vCPUs -le 8} | select -first 1
-            }
+                # Using Get-AzureRmComputeResourceSku instead of Get-AzureRmVMSize because Get-AzureRmComputeResourceSku includes SKU restriction info (e.g. NotAvailableForSubscription) but Get-AzureRmVMSize does not.
+                # Get V3 sizes in the region. V3 size is required for nested virtualization.
+                $sizes = Get-AzureRmComputeResourceSku | where {$_.Name.Endswith('v3') -and $_.Locations.Contains($location)}
+                # Get the sizes with no SKU restrictions (exclude sizes where Restrictions is NotAvailableForSubscription, etc.)
+                $sizes = $sizes | where {[string]::IsNullOrEmpty(($_.Restrictions | where Type -eq Location).ReasonCode)}
+                # Put vCPUs and PremiumIO properties at root of object to facilitate sorting
+                $sizes = $sizes | select Name, @{Name='vCPUs';Expression = {[int]($_.Capabilities.Where{$_.Name -eq 'vCPUS'}).Value}}, @{Name='PremiumIO';Expression = {($_.Capabilities.Where{$_.Name -eq 'PremiumIO'}).Value}}
+                # Sort by vCPUs so least expensive sizes are first in the array
+                $sizes = $sizes | sort vCPUs
+                # Use the smallest premium IO size by core count.
+                # If no PremiumIO sizes available, use the smallest standard IO size.
+                # The smallest V3 sizes are 2 core, 8 GB, which should be enough for a rescue VM in most scenarios.
+                if ($sizes.PremiumIO -eq $true)
+                {
+                    $vmSize = $sizes | where {$_.PremiumIO -eq $true -and $_.vCPUs -le 8} | select -first 1
+                }
+                else
+                {
+                    $vmSize = $sizes | where {$_.PremiumIO -eq $false -and $_.vCPUs -le 8} | select -first 1
+                }
 
-            if ([string]::IsNullOrEmpty($vmSize))
-            {
-                write-log "No V3 VM sizes are available for this subscription in $location. A V3 size is required for nested virtualization."
-                write-log "You can try running the script again without -EnableNestedVirtualization"
-                exit
+                if ([string]::IsNullOrEmpty($vmSize))
+                {
+                    write-log "No V3 VM sizes are available for this subscription in $location. A V3 size is required for nested virtualization."
+                    write-log "You can try running the script again without -EnableNestedVirtualization"
+                    exit
+                }
+                else
+                {
+                    $vmSize = $vmSize.Name
+                }
             }
             else
             {
-                $vmSize = $vmSize.Name
+                $vmSize = $vm.HardwareProfile.VmSize
             }
-        }
-        else
-        {
-            $vmSize = $vm.HardwareProfile.VmSize
         }
 
         $osType = $vm.StorageProfile.OsDisk.OsType

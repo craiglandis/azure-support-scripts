@@ -24,17 +24,26 @@
 .PARAMETER EnableNestedHyperV
     Optional Parameter, rescue VM will be created with a V3 VM size and have HyperV configured in it.
 
-.PARAMETER showErrors
-    Optional Parameter. By default it is set to true, so it displays all errors thrown by PowerShell in the console, if set to False it runs in silentMode.
-
-.PARAMETER prefix
-    Optional Parameter. By default the new Rescue VM and its resources are all created under a resource group named same as the original resource group name with a prefix of 'rescue', however the prefix can be changed to a different value to override the default 'rescue'
-
 .PARAMETER UserName
     Optional Parameter. Allows to pass in the user name of the rescue VM during its creation, by default during case creation it will prompt
 
 .PARAMETER Password
     Optional Parameter. Allows to pass in the password of the rescue VM during its creation, by default t will prompt for password during its creation
+
+.PARAMETER vmSize
+    Optional Parameter, rescue VM will be created with the size specified.
+
+    To see available sizes (replace 'westus' with the region where the problem VM resides):
+
+    Get-AzureRmComputeResourceSku | where {$_.Locations.Contains('westus')}
+
+    Note that Get-AzureRmVmSize may return sizes that cannot be deployed due to VM size SKU restrictions. Get-AzureRmComputeResourceSku is aware of VM size SKU restrictions.
+
+.PARAMETER showErrors
+    Optional Parameter. By default it is set to true, so it displays all errors thrown by PowerShell in the console, if set to False it runs in silentMode.
+
+.PARAMETER prefix
+    Optional Parameter. By default the new Rescue VM and its resources are all created under a resource group named same as the original resource group name with a prefix of 'rescue', however the prefix can be changed to a different value to override the default 'rescue'
 
 .PARAMETER AllowManagedVM
     Optional Parameter. This allows the script to support Managed VM's also, however prior to that the SubscriptionID needs to be whitelisted to be able to use the OS Disk Swap feature for managed VM's.
@@ -115,6 +124,9 @@ param(
 
         [Parameter(mandatory=$false)]
         [String]$UserName,
+
+        [Parameter(mandatory=$false)]
+        [String]$vmSize,
 
         [Parameter(mandatory=$false)]
         [Bool]$showErrors=$true,
@@ -317,7 +329,7 @@ $rescueResourceGroupName = "$prefix$resourceGroupName"
 $removeRescueRgScript = "Remove_Rescue_RG_" + $rescueResourceGroupName + ".ps1"
 CreateRemoveRescueRgScript -rescueResourceGroupName $rescueResourceGroupName -removeRescueRgScript $removeRescueRgScript -scriptonly -subscriptionId $subscriptionId
 $removeRescueRgScriptPath = (get-childitem $removeRescueRgScript).FullName
-$rescueVM = CreateRescueVM -vm $vm -resourceGroupName $resourceGroupName -rescueVMName $rescueVMName -rescueResourceGroupName $rescueResourceGroupName -prefix $prefix -Sku $sku -Offer $offer -Publisher $Publisher -Version $Version -Credential $cred -EnableNestedHyperV:$enableNestedHyperV
+$rescueVM = CreateRescueVM -vm $vm -resourceGroupName $resourceGroupName -rescueVMName $rescueVMName -rescueResourceGroupName $rescueResourceGroupName -prefix $prefix -Sku $sku -Offer $offer -Publisher $Publisher -Version $Version -Credential $cred -EnableNestedHyperV:$enableNestedHyperV -vmSize $vmSize
 write-log "`$rescueVM: $rescueVM" -logOnly
 if (-not $rescueVM)
 {
@@ -403,13 +415,14 @@ if ($enableNestedHyperV)
             }
         } until ($powerState -eq 'PowerState/running' -and $provisioningState -eq 'ProvisioningState/succeeded' -and $vmAgentStatus -eq 'Ready')
         write-log "[Success] rescue VM $($rescueVm.Name) is ready, PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus" -color Green
+        $hypervInstalled = $true
     }
     else
     {
-        write-log "[Failed] Hyper-V install failed, STDOUT: $stdout"
-        # Making the Hyper-V install failure a fatal error for the overall script execution.
-        # Though there may be a case for ignoring it to allow just using the rescue VM for investigating the problem VM's OS disk offline, just not in Hyper-V.
-        exit
+        # The Hyper-V install failing is not fatal to the overall script
+        # If the disk attach succeeds you can still investigate the disk offline
+        write-log "[Failed] Hyper-V install failed, STDOUT: $stdout" -color Yellow
+        $hypervInstalled = $false
     }
 }
 
@@ -458,7 +471,7 @@ if (-not $attached)
 }
 
 # Step 6a Create nested guest in rescue VM from problem VM's OS disk
-if ($enableNestedHyperV)
+if ($hypervInstalled)
 {
     write-log "[Running] Creating nested guest VM in rescue VM $($rescueVm.Name)"
     $return = Set-AzureRmVMCustomScriptExtension -ResourceGroupName $rescueResourceGroupName -VMName $rescuevm.Name -Name $extensionResourceName -Location $location -FileUri $fileUri -Run $run -TypeHandlerVersion $typeHandlerVersion -ForceRerun (get-date).ticks
@@ -476,20 +489,9 @@ if ($enableNestedHyperV)
     }
 }
 
-<# Commenting this out, it's unnecessary because VMs are always started when created, you don't need to start them explicitly as a separate step
-#Step 7 Start the VM
-write-log "[Running] Starting rescue VM $($rescueVm.Name)"
-$started = Start-AzureRmVM -resourceGroupName $rescueResourceGroupName -Name $rescuevm.Name
-write-log "`$started: $started" -logOnly
-if ($started)
-{
-   write-log "[Success] Started rescue VM $($rescueVm.Name)" -color green
-}
-#>
-
 #Step 8 Automatically start up the RDP Connection, if is a windows VM and did not run from cloudshell
 #Manual Fixing of the oS Disk
-if ($windowsVM -and -not (RanFromCloudShell))
+if (($windowsVM -or $enableNestedHyperV) -and -not (RanFromCloudShell))
 {
     write-log "[Running] Getting RDP file for rescue VM $($rescuevm.Name)"
     Get-AzureRmRemoteDesktopFile -resourceGroupName $rescueResourceGroupName -Name $rescuevm.Name -Launch
