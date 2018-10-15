@@ -497,7 +497,7 @@ function CreateRescueVM(
                 # Put vCPUs and PremiumIO properties at root of object to facilitate sorting
                 $sizes = $sizes | select Name, @{Name='vCPUs';Expression = {[int]($_.Capabilities.Where{$_.Name -eq 'vCPUS'}).Value}}, @{Name='PremiumIO';Expression = {($_.Capabilities.Where{$_.Name -eq 'PremiumIO'}).Value}}
                 # Sort by vCPUs so least expensive sizes are first in the array
-                $sizes = $sizes | sort vCPUs
+                $sizes = $sizes | sort-object -Property vCPUs
                 # Use the smallest premium IO size by core count.
                 # If no PremiumIO sizes available, use the smallest standard IO size.
                 # The smallest V3 sizes are 2 core, 8 GB, which should be enough for a rescue VM in most scenarios.
@@ -764,7 +764,7 @@ function StopTargetVM
             write-log "Errors logged during script execution`n" -noTimestamp -logOnly
             write-log ('='*47) -logOnly
             write-log "`n" -logOnly
-            $error | sort -descending | % {write-log ('Line:' + $_.InvocationInfo.ScriptLineNumber + ' Char:' + $_.InvocationInfo.OffsetInLine + ' ' + $_.Exception.ErrorRecord) -logOnly}
+            $error | sort-object -descending | % {write-log ('Line:' + $_.InvocationInfo.ScriptLineNumber + ' Char:' + $_.InvocationInfo.OffsetInLine + ' ' + $_.Exception.ErrorRecord) -logOnly}
         }
     }
     return $false
