@@ -503,11 +503,11 @@ function CreateRescueVM(
                 # The smallest V3 sizes are 2 core, 8 GB, which should be enough for a rescue VM in most scenarios.
                 if ($sizes.PremiumIO -eq $true)
                 {
-                    $vmSize = $sizes | where {$_.PremiumIO -eq $true -and $_.vCPUs -le 8} | select -first 1
+                    $vmSize = ($sizes | where {$_.PremiumIO -eq $true -and $_.vCPUs -le 8} | select -first 1).Name
                 }
                 else
                 {
-                    $vmSize = $sizes | where {$_.PremiumIO -eq $false -and $_.vCPUs -le 8} | select -first 1
+                    $vmSize = ($sizes | where {$_.PremiumIO -eq $false -and $_.vCPUs -le 8} | select -first 1).Name
                 }
 
                 if ([string]::IsNullOrEmpty($vmSize))
@@ -515,10 +515,6 @@ function CreateRescueVM(
                     write-log "No V3 VM sizes are available for this subscription in $location. A V3 size is required for nested virtualization."
                     write-log "You can try running the script again without -EnableNestedVirtualization"
                     exit
-                }
-                else
-                {
-                    $vmSize = $vmSize.Name
                 }
             }
             else
