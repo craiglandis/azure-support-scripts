@@ -224,6 +224,12 @@ write-log "AccountType: $accountType" -logOnly
 write-log "TenantId: $tenantId" -logOnly
 write-log "Environment: $environmentName" -logOnly
 
+if ([string]::IsNullOrEmpty($vmSize) -eq $false -and $enableNestedHyperV -and $vmSize.Endswith('v3') -eq $false)
+{
+    write-log "You must specify a V3 VM size when using both -EnableNestedHyperV and -vmSize." -color red
+    exit
+}
+
 # Step 1 Get VM object
 write-log "[Running] Get-AzureRmVM -resourceGroupName $resourceGroupName -Name $vmName"
 try

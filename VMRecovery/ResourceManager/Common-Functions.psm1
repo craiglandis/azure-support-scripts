@@ -471,7 +471,7 @@ function CreateRescueVM(
     [Parameter(mandatory=$false)]
     [switch]$enableNestedHyperV,
     [Parameter(mandatory=$false)]
-    [String]$vmSize,
+    [String]$vmSize
 )
 {
     try
