@@ -461,10 +461,12 @@ else
     $diskName = ($osDiskVHDToBeRepaired.Split('/')[-1]).split('.')[0]
     $diskName = Get-ValidLength -InputString $diskName -Maxlength 80
     $osDiskSize = $vm.StorageProfile.OsDisk.DiskSizeGB
+    $global:debugvm = $vm
     if (-not $osDiskSize)
     {
        $osDiskSize = 127
        write-log "Unable to determine OS disk size for problem VM $vmName. Will use 127GB when attaching it to the rescue VM as a data disk."
+       exit
     }
 }
 $attached = AttachOsDisktoRescueVM -rescueVMName $rescueVMName -rescueResourceGroupName $rescueResourceGroupName -osDiskVHDToBeRepaired $osDiskVHDToBeRepaired -diskName $diskName -osDiskSize $osDiskSize -managedDiskID $managedDiskID
