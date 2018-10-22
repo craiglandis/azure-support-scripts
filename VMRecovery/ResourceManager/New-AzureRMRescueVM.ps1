@@ -423,11 +423,12 @@ if ($enableNestedHyperV)
                 write-log "[Failed] Timed out waiting for VM: PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus, nested Hyper-V will not be configured" -color Yellow
             }
         } until ($powerState -eq 'PowerState/running' -and $provisioningState -eq 'ProvisioningState/succeeded' -and $vmAgentStatus -eq 'Ready')
-        write-log "[Success] rescue VM $($rescueVm.Name) is ready, PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus" -color Green
-        # see if just waiting 1 min. helps (5 min. did help)
-        write-log "START Sleeping 60 seconds" -color cyan
+        # Without this sleep, in the scenario where the Windows problem VM is using unmanaged disks,
+        # even though it's waiting for it to be ready, for some reason it can still Stop 7B due to the disk collision issue
+        # where you attach the disk and then reboot
         start-sleep -seconds 60
-        write-log "END Sleeping 60 seconds" -color cyan
+        write-log "[Success] rescue VM $($rescueVm.Name) is ready, PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus" -color Green
+
         $rescueVmStatus = $null
         $powerState = $null
         $provisioningState = $null
