@@ -379,6 +379,10 @@ if ($enableNestedHyperV)
         }
     } until ($powerState -eq 'PowerState/running' -and $provisioningState -eq 'ProvisioningState/succeeded' -and $vmAgentStatus -eq 'Ready')
     write-log "[Success] rescue VM $($rescueVm.Name) is ready, PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus" -color Green
+    $rescueVmStatus = $null
+    $powerState = $null
+    $provisioningState = $null
+    $vmAgentStatus = $null
 
     $fileUri = 'https://raw.githubusercontent.com/craiglandis/azure-support-scripts/master/VMRecovery/ResourceManager/Enable-NestedHyperV.ps1'
     $run = $fileUri.Split('/')[-1]
@@ -401,7 +405,6 @@ if ($enableNestedHyperV)
         if ($return.Status -eq 'Succeeded')
         {
             write-log "[Success] Restarted rescue VM $($rescueVm.Name)" -color green
-            #start-sleep -Seconds 15
         }
 
         $rescueVmRestartTime = get-date
@@ -421,6 +424,15 @@ if ($enableNestedHyperV)
             }
         } until ($powerState -eq 'PowerState/running' -and $provisioningState -eq 'ProvisioningState/succeeded' -and $vmAgentStatus -eq 'Ready')
         write-log "[Success] rescue VM $($rescueVm.Name) is ready, PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus" -color Green
+        # see if just waiting 5 min. helps
+        write-log "START Sleeping 300 seconds" -color cyan
+        start-sleep -seconds 300
+        write-log "END Sleeping 300 seconds" -color cyan
+        $rescueVmStatus = $null
+        $powerState = $null
+        $provisioningState = $null
+        $vmAgentStatus = $null
+
         $hypervInstalled = $true
     }
     else

@@ -1,3 +1,9 @@
+$scriptStartTime = get-date -f yyyyMMddHHmmss
+$scriptPath = split-path -path $MyInvocation.MyCommand.Path -parent
+$scriptName = (split-path -path $MyInvocation.MyCommand.Path -leaf).Split('.')[0]
+$logFile = "$env:PUBLIC\Desktop\$($scriptName)_$($scriptStartTime).log"
+$timestamp | out-file -FilePath $logFile
+
 $nestedGuestVmName = 'ProblemVM'
 $batchFile = "$env:allusersprofile\Microsoft\Windows\Start Menu\Programs\StartUp\RunHyperVManagerAndVMConnect.cmd"
 $batchFileContents = @"
@@ -14,6 +20,7 @@ $rsatDhcp = $features | where Name -eq 'RSAT-DHCP'
 
 if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Installed)
 {
+    "START: Creating nested guest VM" | out-file -FilePath $logFile -Append
     # Sets "Do not start Server Manager automatically at logon"
     $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value 1 -force -ErrorAction SilentlyContinue
     $return = New-ItemProperty -Path HKLM:\Software\Microsoft\ServerManager\Oobe -Name DoNotOpenInitialConfigurationTasksAtLogon -PropertyType DWORD -Value 1 -force -ErrorAction SilentlyContinue
@@ -68,6 +75,7 @@ if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Install
         $return = copy-item -path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Administrative Tools\Hyper-V Manager.lnk" -Destination "C:\Users\Public\Desktop"
         # Suppress the prompt for "Do you want to allow your PC to be discoverable by other PCs and devices on this network"
         $return = new-item -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" -Force
+        "END: Creating nested guest VM" | out-file -FilePath $logFile -Append
     }
     catch {
         throw $_
@@ -79,6 +87,7 @@ if ($hyperv.Installed -and $hypervTools.Installed -and $hypervPowerShell.Install
 }
 else
 {
+    "START: Installing Hyper-V" | out-file -FilePath $logFile -Append
     try {
         # Install Hyper-V role. The required restart is handled in the calling script, not this script, to make sure that this script cleanly returns the Hyper-V role install status to the calling script.
         $return = install-windowsfeature -name Hyper-V -IncludeManagementTools -ErrorAction Stop
@@ -87,5 +96,9 @@ else
         throw $_
         exit 1
     }
+    "END: Installing Hyper-V" | out-file -FilePath $logFile -Append
     write-host $return.ExitCode
 }
+
+$scriptEndTime = get-date -f yyyyMMddHHmmss
+$scriptEndTime | out-file -FilePath $logFile -Append
