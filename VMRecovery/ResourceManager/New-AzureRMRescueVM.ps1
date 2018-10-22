@@ -461,12 +461,14 @@ else
     $diskName = ($osDiskVHDToBeRepaired.Split('/')[-1]).split('.')[0]
     $diskName = Get-ValidLength -InputString $diskName -Maxlength 80
     $osDiskSize = $vm.StorageProfile.OsDisk.DiskSizeGB
-    $global:debugvm = $vm
+    # When doing test runs and creating the "problm VM" with -AsJob, if you don't wait long enough,
+    # there is a window of time where Get-AzureRmVm returns VM object for that newly created VM but it's DiskSizeGB property isn't populated yet
+    # and if you try again a few minutes later, DiskSizeGB is populated
+    # So best to just create the test "problem VM" without -AsJob, or wait at least 3 minutes before running New-AzureRMRescueVM.ps1
     if (-not $osDiskSize)
     {
        $osDiskSize = 127
        write-log "Unable to determine OS disk size for problem VM $vmName. Will use 127GB when attaching it to the rescue VM as a data disk."
-       exit
     }
 }
 $attached = AttachOsDisktoRescueVM -rescueVMName $rescueVMName -rescueResourceGroupName $rescueResourceGroupName -osDiskVHDToBeRepaired $osDiskVHDToBeRepaired -diskName $diskName -osDiskSize $osDiskSize -managedDiskID $managedDiskID
