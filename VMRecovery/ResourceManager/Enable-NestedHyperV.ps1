@@ -97,6 +97,7 @@ else
         exit 1
     }
     "END: Installing Hyper-V" | out-file -FilePath $logFile -Append
+    $return.ExitCode
     write-host $return.ExitCode
 }
 

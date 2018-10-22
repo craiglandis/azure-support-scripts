@@ -424,10 +424,10 @@ if ($enableNestedHyperV)
             }
         } until ($powerState -eq 'PowerState/running' -and $provisioningState -eq 'ProvisioningState/succeeded' -and $vmAgentStatus -eq 'Ready')
         write-log "[Success] rescue VM $($rescueVm.Name) is ready, PowerState: $powerState, ProvisioningState: $provisioningState, VM agent status: $vmAgentStatus" -color Green
-        # see if just waiting 5 min. helps
-        write-log "START Sleeping 300 seconds" -color cyan
-        start-sleep -seconds 300
-        write-log "END Sleeping 300 seconds" -color cyan
+        # see if just waiting 1 min. helps (5 min. did help)
+        write-log "START Sleeping 60 seconds" -color cyan
+        start-sleep -seconds 60
+        write-log "END Sleeping 60 seconds" -color cyan
         $rescueVmStatus = $null
         $powerState = $null
         $provisioningState = $null
