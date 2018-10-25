@@ -120,6 +120,9 @@ param(
         [switch]$enableNestedHyperV,
 
         [Parameter(mandatory=$false)]
+        [switch]$enableWinRM,
+
+        [Parameter(mandatory=$false)]
         [String]$Password,
 
         [Parameter(mandatory=$false)]
@@ -335,7 +338,7 @@ $rescueResourceGroupName = "$prefix$resourceGroupName"
 $removeRescueRgScript = "Remove_Rescue_RG_" + $rescueResourceGroupName + ".ps1"
 CreateRemoveRescueRgScript -rescueResourceGroupName $rescueResourceGroupName -removeRescueRgScript $removeRescueRgScript -scriptonly -subscriptionId $subscriptionId
 $removeRescueRgScriptPath = (get-childitem $removeRescueRgScript).FullName
-$rescueVM = CreateRescueVM -vm $vm -resourceGroupName $resourceGroupName -rescueVMName $rescueVMName -rescueResourceGroupName $rescueResourceGroupName -prefix $prefix -Sku $sku -Offer $offer -Publisher $Publisher -Version $Version -Credential $cred -EnableNestedHyperV:$enableNestedHyperV -vmSize $vmSize
+$rescueVM = CreateRescueVM -vm $vm -resourceGroupName $resourceGroupName -rescueVMName $rescueVMName -rescueResourceGroupName $rescueResourceGroupName -prefix $prefix -Sku $sku -Offer $offer -Publisher $Publisher -Version $Version -Credential $cred -vmSize $vmSize -EnableNestedHyperV:$enableNestedHyperV -enableWinRM:$enableWinRM
 write-log "`$rescueVM: $rescueVM" -logOnly
 if (-not $rescueVM)
 {

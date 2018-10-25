@@ -469,10 +469,12 @@ function CreateRescueVM(
     [Parameter(mandatory=$false)]
     [System.Management.Automation.PSCredential]$Credential,
     [Parameter(mandatory=$false)]
+    [String]$vmSize,
+    [Parameter(mandatory=$false)]
     [switch]$enableNestedHyperV,
     [Parameter(mandatory=$false)]
-    [String]$vmSize
-)
+    [switch]$enableWinRM
+    )
 {
     try
     {
@@ -598,6 +600,54 @@ function CreateRescueVM(
             write-log "[Success] Created resource group $rescueResourceGroupName for rescue VM $rescueVMName" -color green
         }
 
+        if ($enableWinRM)
+        {
+            $uniqueString = "$(-join ((97..122) | get-random -Count 8 | % {[char]$_}))$(get-date ($startTime).ToUniversalTime() -f MMddhhmmss)"
+            $vaultName = "vault$uniqueString"
+            write-log "Creating key vault to store WinRM cert"
+            $vault = New-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $rescueResourceGroupName -Location $location -EnabledForDeployment -EnabledForTemplateDeployment -ErrorAction Stop
+            $vaultId = $vault.ResourceId
+            write-log "Vault ID: $vaultId"
+            $certName = "winrm$($rescueResourceGroupName.Substring(2))"
+            $certFilePath = ".\$certName.pfx"
+            $certStore = "My"
+            $certPath = "Cert:\CurrentUser\$certStore"
+            write-log "Creating self-signed cert for WinRM"
+            $thumbprint = (New-SelfSignedCertificate -DnsName $certName -CertStoreLocation $certPath -KeySpec KeyExchange).Thumbprint
+            write-log "Created: $certPath\$thumbprint"
+            $cert = (Get-ChildItem -Path $certPath\$thumbprint)
+            $certFile = Export-PfxCertificate -Cert $cert -FilePath ".\$certName.pfx" -Password $passwordSecureString
+
+            $fileName = ".\$certName.pfx"
+            $fileContentBytes = Get-Content $fileName -Encoding Byte
+            $fileContentEncoded = [System.Convert]::ToBase64String($fileContentBytes)
+
+            $jsonObject = @"
+            {
+                "data": "$filecontentencoded",
+                "dataType" :"pfx",
+                "password": "$password"
+            }
+"@ # White space is not allowed before the here-string terminator. Do not indent this line.
+
+            $jsonObjectBytes = [System.Text.Encoding]::UTF8.GetBytes($jsonObject)
+            $jsonEncoded = [System.Convert]::ToBase64String($jsonObjectBytes)
+
+            $secretName = $certName
+            $secret = ConvertTo-SecureString -String $jsonEncoded -AsPlainText -Force
+            $context = get-azurermcontext
+            if($context.Account.Type -eq 'ServicePrincipal')
+            {
+                $servicePrincipalName = $context.Account.Id
+                $permissionsToKeys = @('decrypt','encrypt','unwrapKey','wrapKey','verify','sign','get','list','update','create','import','delete','backup','restore','recover','purge')
+                $permissionsToSecrets = @('get','list','set','delete','backup','restore','recover','purge')
+                show-progress "Updating vault access policy to allow access by currently logged in service principal $servicePrincipalName"
+                $policy = Set-AzureRmKeyVaultAccessPolicy -VaultName $vaultName -ServicePrincipalName $servicePrincipalName -PermissionsToKeys $permissionsToKeys -PermissionsToSecrets $permissionsToSecrets
+            }
+            $certURL = (Set-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName -SecretValue $secret).Id
+            show-progress "WinRM cert key vault URL: $certURL"
+        }
+
         # Create storage account if it's a managed disk VM
         if (-not $managedVM)
         {
@@ -639,7 +689,15 @@ function CreateRescueVM(
         # When -EnableNestedHyperV is specified, create a Windows rescue VM even if the problem VM is Linux so the Linux problem VM will be available as a nested guest in the Windows rescue VM.
         if ($osType -eq 'Windows' -or $enableNestedHyperV)
         {
-            $rescueVM = Set-AzureRmVMOperatingSystem -VM $rescueVM -Windows -ComputerName $rescueComputerName -Credential $Credential -ProvisionVMAgent -EnableAutoUpdate -WarningAction SilentlyContinue -ErrorAction Stop
+            if ($enableWinRM)
+            {
+                $rescueVM = Set-AzureRmVMOperatingSystem -VM $rescueVM -Windows -ComputerName $rescueComputerName -Credential $Credential -ProvisionVMAgent -EnableAutoUpdate -WinRMHttp -WinRMHttps -WinRMCertificateUrl $certURL -WarningAction SilentlyContinue -ErrorAction Stop
+                $rescueVM = Add-AzureRmVMSecret -VM $rescueVM -SourceVaultId $vaultId -CertificateStore $certStore -CertificateUrl $certURL
+            }
+            else
+            {
+                $rescueVM = Set-AzureRmVMOperatingSystem -VM $rescueVM -Windows -ComputerName $rescueComputerName -Credential $Credential -ProvisionVMAgent -EnableAutoUpdate -WarningAction SilentlyContinue -ErrorAction Stop
+            }
             # Use Windows Server 2016 with GUI as some may prefer a GUI for troubleshooting/mitigating the problem VM's OS disk
             # If desired, a different image can be used for the rescue VM by specifying -publisher/-offer/-sku as script parameters.
             $ImageObj = (get-azurermvmimage -Location $location -PublisherName 'MicrosoftWindowsServer' -Offer 'WindowsServer' -Skus '2016-Datacenter')[-1]
