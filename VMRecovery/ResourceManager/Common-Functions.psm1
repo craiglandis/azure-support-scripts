@@ -602,24 +602,24 @@ function CreateRescueVM(
 
         if ($enableWinRM)
         {
-            $uniqueString = "$(-join ((97..122) | get-random -Count 8 | % {[char]$_}))$(get-date ($startTime).ToUniversalTime() -f MMddhhmmss)"
+            $uniqueString = "$(-join ((97..122) | get-random -Count 8 | % {[char]$_}))$(get-date (get-date).ToUniversalTime() -f MMddhhmmss)"
             $vaultName = "vault$uniqueString"
-            write-log "Creating key vault to store WinRM cert"
+            write-log "[Running] Creating key vault to store WinRM cert"
             $vault = New-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $rescueResourceGroupName -Location $location -EnabledForDeployment -EnabledForTemplateDeployment -ErrorAction Stop
             $vaultId = $vault.ResourceId
-            write-log "Vault ID: $vaultId"
+            write-log "[Success] Vault ID: $vaultId" -color green
             $certName = "winrm$($rescueResourceGroupName.Substring(2))"
             $certFilePath = ".\$certName.pfx"
             $certStore = "My"
             $certPath = "Cert:\CurrentUser\$certStore"
-            write-log "Creating self-signed cert for WinRM"
-            $thumbprint = (New-SelfSignedCertificate -DnsName $certName -CertStoreLocation $certPath -KeySpec KeyExchange).Thumbprint
-            write-log "Created: $certPath\$thumbprint"
+            write-log "[Running] Creating self-signed cert for WinRM"
+            $thumbprint = (New-SelfSignedCertificate -DnsName $certName -CertStoreLocation $certPath -KeySpec KeyExchange -ErrorAction Stop).Thumbprint
+            write-log "[Success] Created: $certPath\$thumbprint"
             $cert = (Get-ChildItem -Path $certPath\$thumbprint)
-            $certFile = Export-PfxCertificate -Cert $cert -FilePath ".\$certName.pfx" -Password $passwordSecureString
+            $certFileName = ".\$certName.pfx"
+            $certFile = Export-PfxCertificate -Cert $cert -FilePath $certFileName -Password $passwordSecureString -ErrorAction Stop
 
-            $fileName = ".\$certName.pfx"
-            $fileContentBytes = Get-Content $fileName -Encoding Byte
+            $fileContentBytes = Get-Content $certFileName -Encoding Byte
             $fileContentEncoded = [System.Convert]::ToBase64String($fileContentBytes)
 
             $jsonObject = @"
@@ -641,11 +641,11 @@ function CreateRescueVM(
                 $servicePrincipalName = $context.Account.Id
                 $permissionsToKeys = @('decrypt','encrypt','unwrapKey','wrapKey','verify','sign','get','list','update','create','import','delete','backup','restore','recover','purge')
                 $permissionsToSecrets = @('get','list','set','delete','backup','restore','recover','purge')
-                show-progress "Updating vault access policy to allow access by currently logged in service principal $servicePrincipalName"
+                write-log "Updating vault access policy to allow access by currently logged in service principal $servicePrincipalName"
                 $policy = Set-AzureRmKeyVaultAccessPolicy -VaultName $vaultName -ServicePrincipalName $servicePrincipalName -PermissionsToKeys $permissionsToKeys -PermissionsToSecrets $permissionsToSecrets
             }
             $certURL = (Set-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName -SecretValue $secret).Id
-            show-progress "WinRM cert key vault URL: $certURL"
+            write-log "WinRM cert key vault URL: $certURL"
         }
 
         # Create storage account if it's a managed disk VM
