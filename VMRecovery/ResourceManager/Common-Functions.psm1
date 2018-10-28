@@ -609,14 +609,17 @@ function CreateRescueVM(
             $vaultId = $vault.ResourceId
             write-log "[Success] Vault ID: $vaultId" -color green
             $certName = "winrm$($rescueResourceGroupName.Substring(2))"
-            $certFilePath = ".\$certName.pfx"
             $certStore = "My"
             $certPath = "Cert:\CurrentUser\$certStore"
             write-log "[Running] Creating self-signed cert for WinRM"
             $thumbprint = (New-SelfSignedCertificate -DnsName $certName -CertStoreLocation $certPath -KeySpec KeyExchange -ErrorAction Stop).Thumbprint
             write-log "[Success] Created: $certPath\$thumbprint"
+            $passwordSecureString = $Credential.Password
+            write-log "`$passwordSecureString: $passwordSecureString" -logOnly
+            $password = $Credential.GetNetworkCredential().password
+            write-log "`$password: $password" -logOnly
             $cert = (Get-ChildItem -Path $certPath\$thumbprint)
-            $certFileName = ".\$certName.pfx"
+            $certFileName = "C:\src\azure-support-scripts\VMRecovery\ResourceManager\$certName.pfx"
             $certFile = Export-PfxCertificate -Cert $cert -FilePath $certFileName -Password $passwordSecureString -ErrorAction Stop
 
             $fileContentBytes = Get-Content $certFileName -Encoding Byte
