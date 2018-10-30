@@ -608,7 +608,8 @@ function CreateRescueVM(
             $vault = New-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $rescueResourceGroupName -Location $location -EnabledForDeployment -EnabledForTemplateDeployment -ErrorAction Stop
             $vaultId = $vault.ResourceId
             write-log "[Success] Vault ID: $vaultId" -color green
-            $certName = "winrm$($rescueResourceGroupName.Substring(2))"
+            #$certName = "winrm$($rescueResourceGroupName.Substring(2))"
+            $certName = "winrm$($rescueVMName)"
             $certStore = "My"
             $certPath = "Cert:\CurrentUser\$certStore"
             write-log "[Running] Creating self-signed cert for WinRM"
@@ -621,18 +622,19 @@ function CreateRescueVM(
             $cert = (Get-ChildItem -Path $certPath\$thumbprint)
             $certFileName = "C:\src\azure-support-scripts\VMRecovery\ResourceManager\$certName.pfx"
             $certFile = Export-PfxCertificate -Cert $cert -FilePath $certFileName -Password $passwordSecureString -ErrorAction Stop
-
             $fileContentBytes = Get-Content $certFileName -Encoding Byte
+            remove-item -Path $certFileName -Force
             $fileContentEncoded = [System.Convert]::ToBase64String($fileContentBytes)
-
-            $jsonObject = @"
-            {
-                "data": "$filecontentencoded",
-                "dataType" :"pfx",
-                "password": "$password"
-            }
-"@ # White space is not allowed before the here-string terminator. Do not indent this line.
-
+            $jsonObject = [pscustomobject][ordered]@{data = $fileContentEncoded;dataType = 'pfx';password = $password} | ConvertTo-Json
+<#
+$jsonObject = @"
+{
+"data": "$filecontentencoded",
+"dataType" :"pfx",
+"password": "$password"
+}
+"@
+#>
             $jsonObjectBytes = [System.Text.Encoding]::UTF8.GetBytes($jsonObject)
             $jsonEncoded = [System.Convert]::ToBase64String($jsonObjectBytes)
 
