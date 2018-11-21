@@ -183,3 +183,4 @@ write-host "Completed $($tests.count) in $scriptDuration"
 # cleanup
 # get-childitem cert:\currentuser\my | where subject -match 'winrm' | foreach{remove-item $_.PSPath}
 #(vms).Name | where {$_ -notmatch 'RLGUESTRESTART' -and $_ -notmatch 'RLWITHCRASH' -and $_ -notmatch 'RLWITHOUTCRASH'} | foreach {nuke $_}
+#(Get-AzureRmResourceGroup).resourcegroupname | where {$_.length -eq 3 -or $_ -match 'rescue'} | foreach {nuke $_}
