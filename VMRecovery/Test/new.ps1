@@ -537,34 +537,21 @@ if ($enableWinRM)
     $vault = New-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroupName -Location $location -EnabledForDeployment -EnabledForTemplateDeployment -ErrorAction Stop
     $vaultId = $vault.ResourceId
     show-progress "Vault ID: $vaultId"
-    #$certName = "winrm$($resourceGroupName.Substring(2))"
     $certName = "winrm$($vmName)"
-    $certFilePath = ".\$certName.pfx"
+    $certFilePath = "$env:TEMP\$certName.pfx"
     $certStore = "My"
-    $certPath = "Cert:\CurrentUser\$certStore"
+    $certStoreLocation = "Cert:\CurrentUser\$certStore"
     show-progress "Creating self-signed cert for WinRM"
-    $thumbprint = (New-SelfSignedCertificate -DnsName $certName -CertStoreLocation $certPath -KeySpec KeyExchange -ErrorAction Stop).Thumbprint
-    show-progress "Created: $certPath\$thumbprint"
-    $cert = (Get-ChildItem -Path $certPath\$thumbprint)
+    $thumbprint = (New-SelfSignedCertificate -DnsName $certName -CertStoreLocation $certStoreLocation -KeySpec KeyExchange -ErrorAction Stop).Thumbprint
+    show-progress "Created: $certStoreLocation\$thumbprint"
+    $cert = (Get-ChildItem -Path $certStoreLocation\$thumbprint)
     $certFile = Export-PfxCertificate -Cert $cert -FilePath $certFilePath -Password $passwordSecureString -ErrorAction Stop
     $fileContentBytes = Get-Content $certFilePath -Encoding Byte -ErrorAction Stop
-    remove-item -Path $certFileName -Force
+    remove-item -Path $certFilePath -Force
     $fileContentEncoded = [System.Convert]::ToBase64String($fileContentBytes)
-
     $jsonObject = [pscustomobject][ordered]@{data = $fileContentEncoded;dataType = 'pfx';password = $password} | ConvertTo-Json
-<#
-$jsonObject = @"
-{
-"data": "$filecontentencoded",
-"dataType" :"pfx",
-"password": "$password"
-}
-"@
-#>
-
     $jsonObjectBytes = [System.Text.Encoding]::UTF8.GetBytes($jsonObject)
     $jsonEncoded = [System.Convert]::ToBase64String($jsonObjectBytes)
-
     $secretName = $certName
     $secret = ConvertTo-SecureString -String $jsonEncoded -AsPlainText -Force -ErrorAction Stop
     $context = get-azurermcontext -ErrorAction Stop

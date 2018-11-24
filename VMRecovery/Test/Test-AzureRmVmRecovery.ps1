@@ -1,19 +1,20 @@
 param(
-    [string]$userName = 'craig',
-    [string]$password = $password,
-    [string]$scriptPath = 'C:\src\azure-support-scripts\VMRecovery\ResourceManager'
+    [string]$userName = 'azureuser',
+    [string]$password = $password
 )
 
 $scriptStartTime = get-date
+$testScriptPath = split-path -path $MyInvocation.MyCommand.Path -parent
+$resourceManagerScriptPath = "$(split-path $testScriptPath)\ResourceManager"
 
-$tests = get-content -Path "$scriptPath\tests.json" | convertfrom-json
+$tests = get-content -Path "$testScriptPath\tests.json" | convertfrom-json
 
 $tests | foreach {
     $test = $_
     $problemVmName = -join (65..90 | Get-Random -Count 3 | % {[char]$_})
     $rescueVmName = "rescue$($problemVmName)"
-    $createProblemVmCommand = "new -resourceGroupName $problemVmName -vmName $problemVmName -userName $userName -password $password $($test.createProblemVMCommand)"
-    $createRescueVmCommand = "$scriptPath\New-AzureRMRescueVM.ps1 -ResourceGroupName $problemVmName -VmName $problemVmName -userName $userName -password $password $($test.createRescueVmCommand)"
+    $createProblemVmCommand = "$testScriptPath\new.ps1 -resourceGroupName $problemVmName -vmName $problemVmName -userName $userName -password $password $($test.createProblemVMCommand)"
+    $createRescueVmCommand = "$resourceManagerScriptPath\New-AzureRMRescueVM.ps1 -ResourceGroupName $problemVmName -VmName $problemVmName -userName $userName -password $password $($test.createRescueVmCommand)"
     $removeProblemVmCommand = 'Start-RSjob -Name {$problemVmName} -ScriptBlock {Param($problemVmName);Remove-AzureRmResourceGroup -Name $problemVmName -Force}'
     $removeRescueVmCommand = 'Start-RSjob -Name {$rescueVmName} -ScriptBlock {Param($rescueVmName);Remove-AzureRmResourceGroup -Name $rescueVmName -Force}'
     $startTime = get-date -Date (get-date).ToUniversalTime() -Format yyyy-MM-ddTHH:mm:ssZ
@@ -125,7 +126,7 @@ do {
         $test = $_
         $global:debugtest = $test
 
-        $logFilePath = (get-childitem -Path "$scriptPath\New-AzureRMRescueVM_$($test.problemVMName)*.log").Fullname
+        $logFilePath = (get-childitem -Path "$resourceManagerScriptPath\New-AzureRMRescueVM_$($test.problemVMName)*.log").Fullname
         if ($logFilePath -and (test-path -Path $logFilePath))
         {
             $logFileContents = get-content -Path $logFilePath
@@ -160,7 +161,7 @@ $tests | foreach {
     $global:debugtest = $test
     $result = $test.job | receive-rsjob
     $test | Add-Member -MemberType NoteProperty -Name 'result' -Value $result -Force
-    $logFilePath = (get-childitem -Path "$scriptPath\New-AzureRMRescueVM_$($test.problemVMName)*.log").Fullname
+    $logFilePath = (get-childitem -Path "$resourceManagerScriptPath\New-AzureRMRescueVM_$($test.problemVMName)*.log").Fullname
     if (test-path -Path $logFilePath)
     {
         $logFileContents = get-content -Path $logFilePath
@@ -172,7 +173,7 @@ $tests | foreach {
 
 $tests | format-table Name, result, problemVmName, rescueVmName, startTime, endTime, duration, @{Label='error'; Expression={$_.job.Error}}, logFileLastLine -AutoSize
 
-$resultsFilePath = "$scriptPath\testresult_$(get-date -Format yyyMMddhhmmss).xlsx"
+$resultsFilePath = "$testScriptPath\testresult_$(get-date -Format yyyMMddhhmmss).xlsx"
 $tests | Export-Excel -Path $resultsFilePath
 invoke-item -Path $resultsFilePath
 

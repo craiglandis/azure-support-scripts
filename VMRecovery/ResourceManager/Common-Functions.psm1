@@ -608,39 +608,29 @@ function CreateRescueVM(
             $vault = New-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $rescueResourceGroupName -Location $location -EnabledForDeployment -EnabledForTemplateDeployment -ErrorAction Stop
             $vaultId = $vault.ResourceId
             write-log "[Success] Vault ID: $vaultId" -color green
-            #$certName = "winrm$($rescueResourceGroupName.Substring(2))"
             $certName = "winrm$($rescueVMName)"
+            $certFilePath = "$env:TEMP\$certName.pfx"
             $certStore = "My"
-            $certPath = "Cert:\CurrentUser\$certStore"
+            $certStoreLocation = "Cert:\CurrentUser\$certStore"
             write-log "[Running] Creating self-signed cert for WinRM"
-            $thumbprint = (New-SelfSignedCertificate -DnsName $certName -CertStoreLocation $certPath -KeySpec KeyExchange -ErrorAction Stop).Thumbprint
-            write-log "[Success] Created: $certPath\$thumbprint"
+            $thumbprint = (New-SelfSignedCertificate -DnsName $certName -CertStoreLocation $certStoreLocation -KeySpec KeyExchange -ErrorAction Stop).Thumbprint
+            write-log "[Success] Created: $certStoreLocation\$thumbprint"
             $passwordSecureString = $Credential.Password
             write-log "`$passwordSecureString: $passwordSecureString" -logOnly
             $password = $Credential.GetNetworkCredential().password
             write-log "`$password: $password" -logOnly
-            $cert = (Get-ChildItem -Path $certPath\$thumbprint)
-            $certFileName = "C:\src\azure-support-scripts\VMRecovery\ResourceManager\$certName.pfx"
-            $certFile = Export-PfxCertificate -Cert $cert -FilePath $certFileName -Password $passwordSecureString -ErrorAction Stop
-            $fileContentBytes = Get-Content $certFileName -Encoding Byte
-            remove-item -Path $certFileName -Force
+            $cert = (Get-ChildItem -Path $certStoreLocation\$thumbprint)
+            write-log "[Running] Exporting self-signed cert for WinRM to PFX file"
+            $certFile = Export-PfxCertificate -Cert $cert -FilePath $certFilePath -Password $passwordSecureString -ErrorAction Stop
+            $fileContentBytes = Get-Content $certFilePath -Encoding Byte -ErrorAction Stop
+            remove-item -Path $certFilePath -Force
             $fileContentEncoded = [System.Convert]::ToBase64String($fileContentBytes)
             $jsonObject = [pscustomobject][ordered]@{data = $fileContentEncoded;dataType = 'pfx';password = $password} | ConvertTo-Json
-<#
-$jsonObject = @"
-{
-"data": "$filecontentencoded",
-"dataType" :"pfx",
-"password": "$password"
-}
-"@
-#>
             $jsonObjectBytes = [System.Text.Encoding]::UTF8.GetBytes($jsonObject)
             $jsonEncoded = [System.Convert]::ToBase64String($jsonObjectBytes)
-
             $secretName = $certName
-            $secret = ConvertTo-SecureString -String $jsonEncoded -AsPlainText -Force
-            $context = get-azurermcontext
+            $secret = ConvertTo-SecureString -String $jsonEncoded -AsPlainText -Force -ErrorAction Stop
+            $context = get-azurermcontext -ErrorAction Stop
             if($context.Account.Type -eq 'ServicePrincipal')
             {
                 $servicePrincipalName = $context.Account.Id
@@ -649,7 +639,7 @@ $jsonObject = @"
                 write-log "Updating vault access policy to allow access by currently logged in service principal $servicePrincipalName"
                 $policy = Set-AzureRmKeyVaultAccessPolicy -VaultName $vaultName -ServicePrincipalName $servicePrincipalName -PermissionsToKeys $permissionsToKeys -PermissionsToSecrets $permissionsToSecrets
             }
-            $certURL = (Set-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName -SecretValue $secret).Id
+            $certURL = (Set-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName -SecretValue $secret -ErrorAction Stop).Id
             write-log "WinRM cert key vault URL: $certURL"
         }
 
